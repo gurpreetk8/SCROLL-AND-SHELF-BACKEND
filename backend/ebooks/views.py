@@ -305,3 +305,29 @@ def get_wishlist(request):
 
     except Exception as e:
         return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
+    
+@csrf_exempt
+def remove_from_wishlist(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Use POST method.'}, status=405)
+
+    bearer = request.headers.get('Authorization', '')
+    if not bearer.startswith('Bearer '):
+        return JsonResponse({'success': False, 'message': 'Authorization token missing or invalid.'}, status=401)
+
+    token = bearer.split(' ')[1]
+    if not auth_user(token):
+        return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
+
+    try:
+        decoded = jwt_decode(token)
+        user = CustomUser.objects.get(email=decoded.get('email'))
+        data = json.loads(request.body)
+        ebook_id = data.get('ebook_id')
+
+        Wishlist.objects.filter(user=user, ebook_id=ebook_id).delete()
+
+        return JsonResponse({'success': True, 'message': 'Removed from wishlist.'}, status=200)
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
