@@ -240,8 +240,7 @@ def get_ebook_detail(request):
         return JsonResponse({'success': True, 'ebook': ebook_data}, status=200)
 
     except Exception as e:
-        return JsonResponse({'success': False, 'message': f'Unexpected error: {str(e)}'}, status=500) 
-
+        return JsonResponse({'success': False, 'message': f'Unexpected error: {str(e)}'}, status=500)
 
 @csrf_exempt
 def add_to_wishlist(request):
