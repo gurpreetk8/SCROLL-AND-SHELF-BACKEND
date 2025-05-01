@@ -196,51 +196,40 @@ def get_ebook_detail(request):
         return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
 
     try:
-        # Get Bearer token
-        bearer = request.headers.get('Authorization', '')
-        if not bearer.startswith('Bearer '):
-            return JsonResponse({'success': False, 'message': 'Authorization token missing or invalid.'}, status=401)
+        bearer = request.headers.get('Authorization')
+        if not bearer:
+            return JsonResponse({'success': False, 'message': 'Authentication header is required.'}, status=401)
         
-        token = bearer.split(' ')[1]
+        token = bearer.split()[1]
         if not auth_user(token):
-            return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
+            return JsonResponse({'success': False, 'message': 'Invalid token data.'}, status=401)
         
-        decoded = jwt_decode(token)
-        email = decoded.get('email')
-        user = CustomUser.objects.get(email=email)
+        decoded_token = jwt_decode(token)
+        user_email = decoded_token.get('email')
 
-        body = json.loads(request.body)
-        ebook_id = body.get('id')
-
-        # Ensure ebook ID is provided
-        if not ebook_id:
-            return JsonResponse({'success': False, 'message': 'Ebook ID is required.'}, status=400)
-
-        # Fetch ebook
         try:
-            ebook = Ebook.objects.get(id=ebook_id)
-        except Ebook.DoesNotExist:
-            return JsonResponse({'success': False, 'message': 'Ebook not found.'}, status=404)
-
-        sample_images = [str(img.image.url) for img in ebook.sample_images.all()]
-
-        ebook_data = {
+            user = CustomUser.objects.get(email=user_email)
+        except CustomUser.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'User not found.'}, status=404)
+            
+        data = request.POST
+        ebook_id = data.get('id')
+        ebook = Ebook.objects.get(id=ebook_id)
+        sample_images = ebook.sample_images.all()
+        ebook_dict = {
             'id': ebook.id,
             'title': ebook.title,
             'author': ebook.author,
             'description': ebook.description,
             'cover_image': str(ebook.cover_image.url),
             'created_at': ebook.created_at,
-            'sample_images': sample_images
+            'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
         }
-
-        if user.is_subscribed and ebook.file:
-            ebook_data['file_url'] = ebook.file.url
-
-        return JsonResponse({'success': True, 'ebook': ebook_data}, status=200)
-
+        if user.is_subscribed:
+            ebook_dict['file_url'] = ebook.file.url
+        return JsonResponse({'success': True, 'message': 'Ebook detail fetched successfully.', 'ebook': ebook_dict}, status=200)
     except Exception as e:
-        return JsonResponse({'success': False, 'message': f'Unexpected error: {str(e)}'}, status=500)
+        return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
 
 @csrf_exempt
 def add_to_wishlist(request):
