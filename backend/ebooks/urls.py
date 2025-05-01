@@ -11,4 +11,6 @@ urlpatterns = [
     path('trending_books/', views.get_trending_books, name='get_trending_books'),
     path('best_of_month_book/', views.get_best_of_the_month_book, name='get_best_of_the_month_book'),
     path('ebooks_by_category/', views.get_ebooks_by_category, name='get_ebooks_by_category'),
+
+    path('add_to_wishlist/', views.add_to_wishlist, name='add_to_wishlist'),
 ]

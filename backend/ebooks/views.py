@@ -6,7 +6,7 @@ from django.contrib.auth import authenticate, login
 from django.views.decorators.http import require_http_methods
 
 from users.models import CustomUser
-from ebooks.models import Ebook, Category, SampleImage
+from ebooks.models import Ebook, Category, Wishlist 
 
 from users.utils import jwt_encode, jwt_decode, auth_user
 
@@ -186,37 +186,91 @@ def get_best_of_the_month_book(request):
         return JsonResponse({'success': True, 'message': 'Best book of the month fetched successfully.', 'ebook': ebook_dict}, status=200)
     except Exception as e:
         return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
+
+
+# views.py (ebooks)
+
 @csrf_exempt
 def get_ebook_detail(request):
     if request.method != 'POST':
-        return JsonResponse({'success': False, 'message': 'Use POST'}, status=405)
+        return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
 
     try:
-        # TEMPORARY: Skip authentication check
-        # if not request.headers.get('Authorization'):
-        #     return JsonResponse({'success': False, 'message': 'Authentication header is required.'}, status=401)
-            
-        data = json.loads(request.body)
-        ebook_id = data.get('id')
+        # Get Bearer token
+        bearer = request.headers.get('Authorization', '')
+        if not bearer.startswith('Bearer '):
+            return JsonResponse({'success': False, 'message': 'Authorization token missing or invalid.'}, status=401)
         
+        token = bearer.split(' ')[1]
+        if not auth_user(token):
+            return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
+        
+        decoded = jwt_decode(token)
+        email = decoded.get('email')
+        user = CustomUser.objects.get(email=email)
+
+        body = json.loads(request.body)
+        ebook_id = body.get('id')
+
+        # Ensure ebook ID is provided
         if not ebook_id:
-            return JsonResponse({'success': False, 'message': 'Ebook ID required'}, status=400)
+            return JsonResponse({'success': False, 'message': 'Ebook ID is required.'}, status=400)
+
+        # Fetch ebook
+        try:
+            ebook = Ebook.objects.get(id=ebook_id)
+        except Ebook.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'Ebook not found.'}, status=404)
+
+        sample_images = [str(img.image.url) for img in ebook.sample_images.all()]
+
+        ebook_data = {
+            'id': ebook.id,
+            'title': ebook.title,
+            'author': ebook.author,
+            'description': ebook.description,
+            'cover_image': str(ebook.cover_image.url),
+            'created_at': ebook.created_at,
+            'sample_images': sample_images
+        }
+
+        if user.is_subscribed and ebook.file:
+            ebook_data['file_url'] = ebook.file.url
+
+        return JsonResponse({'success': True, 'ebook': ebook_data}, status=200)
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Unexpected error: {str(e)}'}, status=500) 
+
+
+@csrf_exempt
+def add_to_wishlist(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Use POST method.'}, status=405)
+
+    bearer = request.headers.get('Authorization', '')
+    if not bearer.startswith('Bearer '):
+        return JsonResponse({'success': False, 'message': 'Authorization token missing or invalid.'}, status=401)
+
+    token = bearer.split(' ')[1]
+    if not auth_user(token):
+        return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
+
+    try:
+        decoded = jwt_decode(token)
+        user = CustomUser.objects.get(email=decoded.get('email'))
+        data = json.loads(request.body)
+        ebook_id = data.get('ebook_id')
 
         ebook = Ebook.objects.get(id=ebook_id)
-        return JsonResponse({
-            'success': True,
-            'ebook': {
-                'id': ebook.id,
-                'title': ebook.title,
-                'author': ebook.author,
-                'description': ebook.description,
-                'cover_image': str(ebook.cover_image.url),
-                'sample_images': [str(img.image.url) for img in ebook.sample_images.all()],
-                'file_url': str(ebook.file.url) if hasattr(ebook, 'file') else None
-            }
-        })
-        
+
+        wishlist_item, created = Wishlist.objects.get_or_create(user=user, ebook=ebook)
+        if created:
+            return JsonResponse({'success': True, 'message': 'Added to wishlist.'}, status=201)
+        else:
+            return JsonResponse({'success': False, 'message': 'Already in wishlist.'}, status=200)
+
     except Ebook.DoesNotExist:
-        return JsonResponse({'success': False, 'message': 'Book not found'}, status=404)
+        return JsonResponse({'success': False, 'message': 'Ebook not found.'}, status=404)
     except Exception as e:
-        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+        return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
