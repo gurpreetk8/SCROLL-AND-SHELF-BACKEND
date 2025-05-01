@@ -186,46 +186,131 @@ def get_best_of_the_month_book(request):
         return JsonResponse({'success': True, 'message': 'Best book of the month fetched successfully.', 'ebook': ebook_dict}, status=200)
     except Exception as e:
         return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
+
 @csrf_exempt
 def get_ebook_detail(request):
+    # 1. Validate request method
     if request.method != 'POST':
-        return JsonResponse({'success': False, 'message': 'Use POST'}, status=405)
+        return JsonResponse({
+            'success': False,
+            'message': 'Only POST requests are allowed',
+            'status': 405
+        }, status=405)
 
     try:
-        # Skip token verification temporarily
-        # bearer = request.headers.get('Authorization')
-        # if not bearer:
-        #     return JsonResponse({'success': False, 'message': 'Auth required'}, status=401)
-        
-        # token = bearer.split()[1]
-        # if not auth_user(token):
-        #     return JsonResponse({'success': False, 'message': 'Invalid token'}, status=401)
+        # 2. Validate Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return JsonResponse({
+                'success': False,
+                'message': 'Authorization header with Bearer token is required',
+                'status': 401
+            }, status=401)
 
-        data = json.loads(request.body)  # Change from request.POST to request.body
+        # 3. Extract and validate token
+        try:
+            token = auth_header.split(' ')[1]
+            if not token:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Token is missing',
+                    'status': 401
+                }, status=401)
+            
+            # Verify token is valid
+            if not auth_user(token):
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Invalid or expired token',
+                    'status': 401
+                }, status=401)
+        except IndexError:
+            return JsonResponse({
+                'success': False,
+                'message': 'Invalid Authorization header format',
+                'status': 401
+            }, status=401)
+
+        # 4. Parse JSON body
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'message': 'Invalid JSON data in request body',
+                'status': 400
+            }, status=400)
+
+        # 5. Validate ebook ID exists in request
         ebook_id = data.get('id')
-        
         if not ebook_id:
-            return JsonResponse({'success': False, 'message': 'Ebook ID required'}, status=400)
+            return JsonResponse({
+                'success': False,
+                'message': 'Ebook ID is required',
+                'status': 400
+            }, status=400)
 
-        ebook = Ebook.objects.get(id=ebook_id)
-        sample_images = ebook.sample_images.all()
-        
-        ebook_dict = {
-            'id': ebook.id,
-            'title': ebook.title,
-            'author': ebook.author,
-            'description': ebook.description,
-            'cover_image': str(ebook.cover_image.url) if ebook.cover_image else None,
-            'sample_images': [str(img.image.url) for img in sample_images if img.image],
-        }
-        
-        # Skip subscription check temporarily
-        # if user.is_subscribed:
-        ebook_dict['file_url'] = str(ebook.file.url) if ebook.file else None
-        
-        return JsonResponse({'success': True, 'ebook': ebook_dict})
+        # 6. Get user from token
+        try:
+            decoded_token = jwt_decode(token)
+            user_email = decoded_token.get('email')
+            if not user_email:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Invalid token payload',
+                    'status': 401
+                }, status=401)
+                
+            user = CustomUser.objects.get(email=user_email)
+        except ObjectDoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'User not found',
+                'status': 404
+            }, status=404)
 
-    except Ebook.DoesNotExist:
-        return JsonResponse({'success': False, 'message': 'Book not found'}, status=404)
+        # 7. Get ebook details
+        try:
+            ebook = Ebook.objects.get(id=ebook_id)
+            sample_images = ebook.sample_images.all()
+            
+            # Build response data with null checks
+            ebook_dict = {
+                'id': ebook.id,
+                'title': ebook.title,
+                'author': ebook.author,
+                'description': ebook.description,
+                'cover_image': str(ebook.cover_image.url) if ebook.cover_image else None,
+                'created_at': ebook.created_at.strftime('%Y-%m-%d %H:%M:%S') if hasattr(ebook, 'created_at') else None,
+                'sample_images': [str(img.image.url) for img in sample_images if img.image],
+            }
+
+            # Add file URL if user is subscribed and file exists
+            if user.is_subscribed and hasattr(ebook, 'file') and ebook.file:
+                ebook_dict['file_url'] = str(ebook.file.url)
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Ebook details fetched successfully',
+                'ebook': ebook_dict,
+                'status': 200
+            })
+
+        except ObjectDoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'Ebook not found',
+                'status': 404
+            }, status=404)
+
     except Exception as e:
-        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+        # Log the actual error for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in get_ebook_detail: {str(e)}", exc_info=True)
+        
+        return JsonResponse({
+            'success': False,
+            'message': 'An internal server error occurred',
+            'status': 500
+        }, status=500)
