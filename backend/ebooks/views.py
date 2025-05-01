@@ -212,7 +212,7 @@ def get_ebook_detail(request):
         except CustomUser.DoesNotExist:
             return JsonResponse({'success': False, 'message': 'User not found.'}, status=404)
             
-        data = request.POST
+        data = json.loads(request.body)
         ebook_id = data.get('id')
         ebook = Ebook.objects.get(id=ebook_id)
         sample_images = ebook.sample_images.all()
