@@ -192,39 +192,30 @@ def get_ebook_detail(request):
         return JsonResponse({'success': False, 'message': 'Use POST'}, status=405)
 
     try:
-        # Skip token verification temporarily
-        # bearer = request.headers.get('Authorization')
-        # if not bearer:
-        #     return JsonResponse({'success': False, 'message': 'Auth required'}, status=401)
-        
-        # token = bearer.split()[1]
-        # if not auth_user(token):
-        #     return JsonResponse({'success': False, 'message': 'Invalid token'}, status=401)
-
-        data = json.loads(request.body)  # Change from request.POST to request.body
+        # TEMPORARY: Skip authentication check
+        # if not request.headers.get('Authorization'):
+        #     return JsonResponse({'success': False, 'message': 'Authentication header is required.'}, status=401)
+            
+        data = json.loads(request.body)
         ebook_id = data.get('id')
         
         if not ebook_id:
             return JsonResponse({'success': False, 'message': 'Ebook ID required'}, status=400)
 
         ebook = Ebook.objects.get(id=ebook_id)
-        sample_images = ebook.sample_images.all()
+        return JsonResponse({
+            'success': True,
+            'ebook': {
+                'id': ebook.id,
+                'title': ebook.title,
+                'author': ebook.author,
+                'description': ebook.description,
+                'cover_image': str(ebook.cover_image.url),
+                'sample_images': [str(img.image.url) for img in ebook.sample_images.all()],
+                'file_url': str(ebook.file.url) if hasattr(ebook, 'file') else None
+            }
+        })
         
-        ebook_dict = {
-            'id': ebook.id,
-            'title': ebook.title,
-            'author': ebook.author,
-            'description': ebook.description,
-            'cover_image': str(ebook.cover_image.url) if ebook.cover_image else None,
-            'sample_images': [str(img.image.url) for img in sample_images if img.image],
-        }
-        
-        # Skip subscription check temporarily
-        # if user.is_subscribed:
-        ebook_dict['file_url'] = str(ebook.file.url) if ebook.file else None
-        
-        return JsonResponse({'success': True, 'ebook': ebook_dict})
-
     except Ebook.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'Book not found'}, status=404)
     except Exception as e:
