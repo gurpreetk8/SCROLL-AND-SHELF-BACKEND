@@ -274,3 +274,34 @@ def add_to_wishlist(request):
         return JsonResponse({'success': False, 'message': 'Ebook not found.'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
+    
+@csrf_exempt
+def get_wishlist(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Use POST method.'}, status=405)
+
+    bearer = request.headers.get('Authorization', '')
+    if not bearer.startswith('Bearer '):
+        return JsonResponse({'success': False, 'message': 'Authorization token missing or invalid.'}, status=401)
+
+    token = bearer.split(' ')[1]
+    if not auth_user(token):
+        return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
+
+    try:
+        decoded = jwt_decode(token)
+        user = CustomUser.objects.get(email=decoded.get('email'))
+        wishlist_items = Wishlist.objects.filter(user=user).select_related('ebook')
+        
+        ebooks = [{
+            'id': item.ebook.id,
+            'title': item.ebook.title,
+            'author': item.ebook.author,
+            'cover_image': str(item.ebook.cover_image.url),
+            'created_at': item.ebook.created_at
+        } for item in wishlist_items]
+
+        return JsonResponse({'success': True, 'wishlist': ebooks}, status=200)
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)

@@ -13,4 +13,5 @@ urlpatterns = [
     path('ebooks_by_category/', views.get_ebooks_by_category, name='get_ebooks_by_category'),
 
     path('add_to_wishlist/', views.add_to_wishlist, name='add_to_wishlist'),
+    path('get_wishlist/', views.get_wishlist, name='get_wishlist'),
 ]
