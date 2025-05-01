@@ -264,7 +264,7 @@ def add_to_wishlist(request):
 
         ebook = Ebook.objects.get(id=ebook_id)
 
-        wishlist_item, created = Wishlist.objects.get_or_create(user=user, ebook=ebook)
+        created = Wishlist.objects.get_or_create(user=user, ebook=ebook)
         if created:
             return JsonResponse({'success': True, 'message': 'Added to wishlist.'}, status=201)
         else:
