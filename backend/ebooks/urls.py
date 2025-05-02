@@ -12,6 +12,9 @@ urlpatterns = [
     path('best_of_month_book/', views.get_best_of_the_month_book, name='get_best_of_the_month_book'),
     path('ebooks_by_category/', views.get_ebooks_by_category, name='get_ebooks_by_category'),
 
+    path('get_series_books/', views.get_series_books, name='get_series_books'),
+    path('get_all_series/', views.get_all_series, name='get_all_series'),
+
     path('add_to_wishlist/', views.add_to_wishlist, name='add_to_wishlist'),
     path('get_wishlist/', views.get_wishlist, name='get_wishlist'),
     path('remove_from_wishlist/', views.remove_from_wishlist, name='remove_from_wishlist'),

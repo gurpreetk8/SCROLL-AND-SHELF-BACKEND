@@ -14,8 +14,35 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name
+    
+class Series(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    description = models.TextField(blank=True)
+    cover_image = models.ImageField(upload_to="series/covers/", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
 
 class Ebook(models.Model):
+    BOOK_TYPE_CHOICES = [
+        ('standalone', 'Standalone'),
+        ('series', 'Series'),
+    ]
+    book_type = models.CharField(
+        max_length=20,
+        choices=BOOK_TYPE_CHOICES,
+        default='standalone'
+    )
+    series = models.ForeignKey(
+        Series,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='books'
+    )
+    series_order = models.PositiveIntegerField(null=True, blank=True)
+
     title = models.CharField(max_length=255)
     author = models.CharField(max_length=255)
     description = models.TextField()
@@ -42,3 +69,12 @@ class SampleImage(models.Model):
 
     def __str__(self):
         return f"{self.ebook.title} sample #{self.id}"
+    
+class SeriesImage(models.Model):
+    series = models.ForeignKey(Series, on_delete=models.CASCADE, related_name='series_images')
+    image = models.ImageField(upload_to="series/sample_images/")
+    caption = models.CharField(max_length=200, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.series.name} image #{self.id}"

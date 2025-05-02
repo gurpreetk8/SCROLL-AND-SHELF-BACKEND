@@ -6,7 +6,7 @@ from django.contrib.auth import authenticate, login
 from django.views.decorators.http import require_http_methods
 
 from users.models import CustomUser
-from ebooks.models import Ebook, Category, Wishlist 
+from ebooks.models import Series, Ebook, Category, Wishlist 
 
 from users.utils import jwt_encode, jwt_decode, auth_user
 
@@ -231,6 +231,63 @@ def get_ebook_detail(request):
         return JsonResponse({'success': True, 'message': 'Ebook detail fetched successfully.', 'ebook': ebook_dict}, status=200)
     except Exception as e:
         return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
+    
+@csrf_exempt
+def get_series_books(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Use POST.'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        series_id = data.get('series_id')
+        
+        series = Series.objects.get(id=series_id)
+        books = series.books.all().order_by('series_order')
+        
+        book_list = []
+        for book in books:
+            book_list.append({
+                'id': book.id,
+                'title': book.title,
+                'cover_image': str(book.cover_image.url),
+                'series_order': book.series_order
+            })
+            
+        return JsonResponse({
+            'success': True,
+            'series': {
+                'name': series.name,
+                'cover_image': str(series.cover_image.url) if series.cover_image else None,
+                'description': series.description
+            },
+            'books': book_list
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+@csrf_exempt
+def get_all_series(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Use POST.'}, status=405)
+
+    try:
+        series = Series.objects.all().order_by('name')
+        series_list = []
+        
+        for s in series:
+            series_list.append({
+                'id': s.id,
+                'name': s.name,
+                'cover_image': str(s.cover_image.url) if s.cover_image else None,
+                'book_count': s.books.count()
+            })
+            
+        return JsonResponse({
+            'success': True,
+            'series': series_list
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
 
 @csrf_exempt
 def add_to_wishlist(request):
