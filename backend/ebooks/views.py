@@ -35,7 +35,14 @@ def get_latest_ebooks(request):
                 'description': ebook.description,
                 'cover_image': str(ebook.cover_image.url),
                 'created_at': ebook.created_at,
-                'sample_images': [str(sample_image.image.url) for sample_image in sample_images]
+                'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
+                   'book_type': ebook.book_type,  # Add this
+                'series_info': {               # Add this
+                    'id': ebook.series.id if ebook.series else None,
+                    'name': ebook.series.name if ebook.series else None,
+                    'order': ebook.series_order
+                } if ebook.book_type == 'series' else None
+            
             }
             ebook_list.append(ebook_dict)
         return JsonResponse({'success': True, 'message': 'Latest ebooks fetched successfully.', 'ebooks': ebook_list}, status=200)
@@ -116,7 +123,14 @@ def get_ebooks_by_category(request):
                 'description': ebook.description,
                 'cover_image': str(ebook.cover_image.url),
                 'created_at': ebook.created_at,
-                'sample_images': [str(sample_image.image.url) for sample_image in sample_images]
+                'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
+                   'book_type': ebook.book_type,  # Add this
+                'series_info': {               # Add this
+                    'id': ebook.series.id if ebook.series else None,
+                    'name': ebook.series.name if ebook.series else None,
+                    'order': ebook.series_order
+                } if ebook.book_type == 'series' else None
+            
             }
             ebook_list.append(ebook_dict)
         return JsonResponse({'success': True, 'message': 'Ebooks by category fetched successfully.', 'ebooks': ebook_list, 'category_name': category.name}, status=200)
@@ -141,7 +155,14 @@ def get_best_sellers(request):
                 'description': ebook.description,
                 'cover_image': str(ebook.cover_image.url),
                 'created_at': ebook.created_at,
-                'sample_images': [str(sample_image.image.url) for sample_image in sample_images]
+                'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
+                   'book_type': ebook.book_type,  # Add this
+                'series_info': {               # Add this
+                    'id': ebook.series.id if ebook.series else None,
+                    'name': ebook.series.name if ebook.series else None,
+                    'order': ebook.series_order
+                } if ebook.book_type == 'series' else None
+            
             }
             ebook_list.append(ebook_dict)
         return JsonResponse({'success': True, 'message': 'Best sellers fetched successfully.', 'ebooks': ebook_list}, status=200)
@@ -165,7 +186,14 @@ def get_trending_books(request):
                 'description': ebook.description,
                 'cover_image': str(ebook.cover_image.url),
                 'created_at': ebook.created_at,
-                'sample_images': [str(sample_image.image.url) for sample_image in sample_images]
+                'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
+                   'book_type': ebook.book_type,  # Add this
+                'series_info': {               # Add this
+                    'id': ebook.series.id if ebook.series else None,
+                    'name': ebook.series.name if ebook.series else None,
+                    'order': ebook.series_order
+                } if ebook.book_type == 'series' else None
+            
             }
             ebook_list.append(ebook_dict)
         return JsonResponse({'success': True, 'message': 'Trending books fetched successfully.', 'ebooks': ebook_list}, status=200)
@@ -189,7 +217,14 @@ def get_best_of_the_month_book(request):
             'description': ebook.description,
             'cover_image': str(ebook.cover_image.url),
             'created_at': ebook.created_at,
-            'sample_images': [str(sample_image.image.url) for sample_image in sample_images]
+            'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
+               'book_type': ebook.book_type,  # Add this
+                'series_info': {               # Add this
+                    'id': ebook.series.id if ebook.series else None,
+                    'name': ebook.series.name if ebook.series else None,
+                    'order': ebook.series_order
+                } if ebook.book_type == 'series' else None
+            
         }
         return JsonResponse({'success': True, 'message': 'Best book of the month fetched successfully.', 'ebook': ebook_dict}, status=200)
     except Exception as e:
@@ -232,6 +267,13 @@ def get_ebook_detail(request):
             'cover_image': str(ebook.cover_image.url),
             'created_at': ebook.created_at,
             'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
+               'book_type': ebook.book_type,  # Add this
+                'series_info': {               # Add this
+                    'id': ebook.series.id if ebook.series else None,
+                    'name': ebook.series.name if ebook.series else None,
+                    'order': ebook.series_order
+                } if ebook.book_type == 'series' else None
+            
         }
         if user.is_subscribed:
             ebook_dict['file_url'] = ebook.file.url
