@@ -81,6 +81,7 @@ def get_all_categories(request):
                 'name': category.name,
                 'slug': category.slug,
                 'image': str(category.image.url),
+                'type': category.type,
                 'created_at': category.created_at
             }
             category_list.append(category_dict)

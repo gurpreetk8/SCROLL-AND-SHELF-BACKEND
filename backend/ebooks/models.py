@@ -1,9 +1,15 @@
 from django.db import models
 
 class Category(models.Model):
+    TYPE_CHOICES = [
+        ('fiction', 'Fiction'),
+        ('non-fiction', 'Non-Fiction'),
+        ('other', 'Other'),
+    ]
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(unique=True)
     image = models.ImageField(upload_to="ebooks/category_images/", blank=True, null=True)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='fiction')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

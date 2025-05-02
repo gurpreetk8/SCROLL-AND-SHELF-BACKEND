@@ -2,7 +2,8 @@ from django.contrib import admin
 from .models import Ebook, Category, SampleImage
 
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ('name',)
+    list_display = ('name', 'type', 'created_at')
+    list_filter = ('type',)
     search_fields = ('name',)
     ordering = ('name',)
 
