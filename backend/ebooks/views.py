@@ -53,6 +53,7 @@ def get_all_ebooks(request):
         ebook_list = []
         for ebook in ebooks:
             sample_images = ebook.sample_images.all()
+            # In all ebook endpoints (get_all_ebooks, get_latest_ebooks, etc.)
             ebook_dict = {
                 'id': ebook.id,
                 'title': ebook.title,
@@ -60,7 +61,13 @@ def get_all_ebooks(request):
                 'description': ebook.description,
                 'cover_image': str(ebook.cover_image.url),
                 'created_at': ebook.created_at,
-                'sample_images': [str(sample_image.image.url) for sample_image in sample_images]
+                'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
+                'book_type': ebook.book_type,  # Add this line
+                'series_info': {               # Add this block
+                    'id': ebook.series.id if ebook.series else None,
+                    'name': ebook.series.name if ebook.series else None,
+                    'order': ebook.series_order
+                } if ebook.book_type == 'series' else None
             }
             ebook_list.append(ebook_dict)
         return JsonResponse({'success': True, 'message': 'All ebooks fetched successfully.', 'ebooks': ebook_list}, status=200)
