@@ -148,7 +148,7 @@ def get_best_sellers(request):
         return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
 
     try:
-        ebooks = Ebook.objects.filter(best_seller=True).order_by('-created_at')[:10]
+        ebooks = Ebook.objects.filter(best_seller=True).order_by('-created_at')[:6]
         ebook_list = []
         for ebook in ebooks:
             sample_images = ebook.sample_images.all()
@@ -180,7 +180,7 @@ def get_trending_books(request):
         return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
 
     try:
-        ebooks = Ebook.objects.filter(trending=True).order_by('-created_at')[:10]
+        ebooks = Ebook.objects.filter(trending=True).order_by('-created_at')[:8]
         ebook_list = []
         for ebook in ebooks:
             sample_images = ebook.sample_images.all()
