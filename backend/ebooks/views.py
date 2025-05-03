@@ -29,12 +29,13 @@ def get_latest_ebooks(request):
         ebook_list = []
         for ebook in ebooks:
             sample_images = ebook.sample_images.all()
+            tags_list = [tag.strip() for tag in ebook.tags.split(",")] if ebook.tags else []
             ebook_dict = {
                 'id': ebook.id,
                 'title': ebook.title,
                 'author': ebook.author,
                 'description': ebook.description,
-                'tags': [tag.name for tag in ebook.tags.all()],
+                'tags': tags_list,
                 'cover_image': str(ebook.cover_image.url),
                 'created_at': ebook.created_at,
                 'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
@@ -62,13 +63,14 @@ def get_all_ebooks(request):
         ebook_list = []
         for ebook in ebooks:
             sample_images = ebook.sample_images.all()
+            tags_list = [tag.strip() for tag in ebook.tags.split(",")] if ebook.tags else []
             # In all ebook endpoints (get_all_ebooks, get_latest_ebooks, etc.)
             ebook_dict = {
                 'id': ebook.id,
                 'title': ebook.title,
                 'author': ebook.author,
                 'description': ebook.description,
-                'tags': [tag.name for tag in ebook.tags.all()],
+                'tags': tags_list,
                 'cover_image': str(ebook.cover_image.url),
                 'created_at': ebook.created_at,
                 'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
@@ -119,12 +121,13 @@ def get_ebooks_by_category(request):
         ebook_list = []
         for ebook in ebooks:
             sample_images = ebook.sample_images.all()
+            tags_list = [tag.strip() for tag in ebook.tags.split(",")] if ebook.tags else []
             ebook_dict = {
                 'id': ebook.id,
                 'title': ebook.title,
                 'author': ebook.author,
                 'description': ebook.description,
-                'tags': [tag.name for tag in ebook.tags.all()],
+                'tags': tags_list,
                 'cover_image': str(ebook.cover_image.url),
                 'created_at': ebook.created_at,
                 'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
@@ -152,12 +155,13 @@ def get_best_sellers(request):
         ebook_list = []
         for ebook in ebooks:
             sample_images = ebook.sample_images.all()
+            tags_list = [tag.strip() for tag in ebook.tags.split(",")] if ebook.tags else []
             ebook_dict = {
                 'id': ebook.id,
                 'title': ebook.title,
                 'author': ebook.author,
                 'description': ebook.description,
-                'tags': [tag.name for tag in ebook.tags.all()],
+                'tags': tags_list,
                 'cover_image': str(ebook.cover_image.url),
                 'created_at': ebook.created_at,
                 'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
@@ -184,12 +188,13 @@ def get_trending_books(request):
         ebook_list = []
         for ebook in ebooks:
             sample_images = ebook.sample_images.all()
+            tags_list = [tag.strip() for tag in ebook.tags.split(",")] if ebook.tags else []
             ebook_dict = {
                 'id': ebook.id,
                 'title': ebook.title,
                 'author': ebook.author,
                 'description': ebook.description,
-                'tags': [tag.name for tag in ebook.tags.all()],
+                'tags': tags_list,
                 'cover_image': str(ebook.cover_image.url),
                 'created_at': ebook.created_at,
                 'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
@@ -216,12 +221,13 @@ def get_best_of_the_month_book(request):
         if not ebook:
             return JsonResponse({'success': False, 'message': 'No best book of the month.'}, status=404)
         sample_images = ebook.sample_images.all()
+        tags_list = [tag.strip() for tag in ebook.tags.split(",")] if ebook.tags else []
         ebook_dict = {
             'id': ebook.id,
             'title': ebook.title,
             'author': ebook.author,
             'description': ebook.description,
-            'tags': [tag.name for tag in ebook.tags.all()],
+            'tags': tags_list,
             'cover_image': str(ebook.cover_image.url),
             'created_at': ebook.created_at,
             'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
@@ -266,33 +272,44 @@ def get_ebook_detail(request):
         ebook_id = data.get('id')
         ebook = Ebook.objects.get(id=ebook_id)
         sample_images = ebook.sample_images.all()
+        
+        # Get tags as a list from the comma-separated string
+        tags_list = [tag.strip() for tag in ebook.tags.split(",")] if ebook.tags else []
+        
         ebook_dict = {
             'id': ebook.id,
             'title': ebook.title,
             'author': ebook.author,
             'description': ebook.description,
-            'tags': [tag.name for tag in ebook.tags.all()],
+            'tags': tags_list,  # Updated to use the CharField tags
             'cover_image': str(ebook.cover_image.url),
             'created_at': ebook.created_at,
             'sample_images': [str(sample_image.image.url) for sample_image in sample_images],
-               'book_type': ebook.book_type,  # Add this
-                'series_info': {               # Add this
-                    'id': ebook.series.id if ebook.series else None,
-                    'name': ebook.series.name if ebook.series else None,
-                    'order': ebook.series_order
-                } if ebook.book_type == 'series' else None,
-                'review_stats': {
+            'book_type': ebook.book_type,
+            'series_info': {
+                'id': ebook.series.id if ebook.series else None,
+                'name': ebook.series.name if ebook.series else None,
+                'order': ebook.series_order
+            } if ebook.book_type == 'series' else None,
+            'review_stats': {
                 'average_rating': ReviewRating.objects.filter(ebook=ebook).aggregate(Avg('rating'))['rating__avg'] or 0,
                 'total_reviews': ReviewRating.objects.filter(ebook=ebook).count()
-                }
-            
-            
+            }
         }
+        
         if user.is_subscribed:
             ebook_dict['file_url'] = ebook.file.url
-        return JsonResponse({'success': True, 'message': 'Ebook detail fetched successfully.', 'ebook': ebook_dict}, status=200)
+            
+        return JsonResponse({
+            'success': True, 
+            'message': 'Ebook detail fetched successfully.', 
+            'ebook': ebook_dict
+        }, status=200)
+        
+    except Ebook.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Ebook not found.'}, status=404)
     except Exception as e:
-        return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
+        return JsonResponse({'success': False, 'message': f'Error: {str(e)}'}, status=400)
     
 @csrf_exempt
 def get_series_books(request):

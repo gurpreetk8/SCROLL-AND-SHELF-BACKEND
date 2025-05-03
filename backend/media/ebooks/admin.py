@@ -32,24 +32,23 @@ class SeriesAdmin(admin.ModelAdmin):
         return obj.books.count()
 
 class EbookAdmin(admin.ModelAdmin):
-    list_display = ('title', 'author', 'book_type', 'series_info', 'created_at', 'categories', 'tag_list')  # added tag_list
-    search_fields = ('title', 'author', 'description', 'tags__name')  # optional: enable tag search
-    list_filter = ('created_at', 'book_type', 'series', 'category', 'tags')  # added 'tags' to filter
+    list_display = ('title', 'author', 'book_type', 'display_tags', 'series_info', 'created_at', 'categories')
+    search_fields = ('title', 'author', 'description', 'tags')
+    list_filter = ('created_at', 'book_type', 'series', 'category')  # Added category to filters
     ordering = ('-created_at',)
     inlines = [SampleImageInline]
-    filter_horizontal = ('tags',)  # if using ManyToManyField-style admin widget
 
     def categories(self, obj):
-        return ', '.join([c.name for c in obj.category.all()])
+        return ', '.join([c.name for c in obj.category.all()])  # Changed to category (singular as per your ForeignKey)
     
     def series_info(self, obj):
         if obj.series:
             return f"{obj.series.name} (#{obj.series_order})"
         return "Standalone"
     
-    def tag_list(self, obj):
-        return ', '.join(obj.tags.names())
-    tag_list.short_description = 'Tags'
+    def display_tags(self, obj):
+        return ", ".join(obj.get_tags_list())
+    display_tags.short_description = 'Tags'
 
     
 class ReviewRatingAdmin(admin.ModelAdmin):

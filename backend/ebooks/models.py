@@ -27,13 +27,6 @@ class Series(models.Model):
     def __str__(self):
         return self.name
 
-class Tag(models.Model):
-    name = models.CharField(max_length=50, unique=True)
-
-    def __str__(self):
-        return self.name
-
-
 class Ebook(models.Model):
     BOOK_TYPE_CHOICES = [
         ('standalone', 'Standalone'),
@@ -66,11 +59,30 @@ class Ebook(models.Model):
     best_of_month = models.BooleanField(default=False)
     trending = models.BooleanField(default=False)
 
-    # ✅ Add ManyToManyField here:
-    tags = models.ManyToManyField(Tag, related_name='ebooks', blank=True)
+    # ✅ Replace ManyToManyField with CharField for comma-separated tags
+    tags = models.CharField(
+        max_length=255, 
+        blank=True, 
+        help_text="Comma-separated tags (e.g., romance, fantasy, young-adult)"
+    )
 
     def __str__(self):
         return self.title
+    
+    def get_tags_list(self):
+        """Convert comma-separated tags string to a list of tags"""
+        if not self.tags:
+            return []
+        return [tag.strip() for tag in self.tags.split(",") if tag.strip()]
+
+    def save(self, *args, **kwargs):
+        """Optional: Clean up tags before saving"""
+        if self.tags:
+            # Remove extra spaces and commas
+            tags = [tag.strip() for tag in self.tags.split(",") if tag.strip()]
+            self.tags = ", ".join(tags)
+        super().save(*args, **kwargs)
+
     
 class Wishlist(models.Model):
     user = models.ForeignKey('users.CustomUser', on_delete=models.CASCADE)
