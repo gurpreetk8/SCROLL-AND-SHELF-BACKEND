@@ -1,5 +1,7 @@
 from django.db import models
-from django.forms import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator  # Add this line
+from django.core.exceptions import ValidationError  # Also needed for clean()
+
 
 class Category(models.Model):
     TYPE_CHOICES = [
@@ -69,7 +71,7 @@ class ReviewRating(models.Model):
     
     # Rating (required if review exists, but can also exist alone)
     rating = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(5)], # type: ignore
+        validators=[MinValueValidator(1), MaxValueValidator(5)], 
         null=True,  # Optional if user only wants to review (but we'll enforce via clean())
         blank=True
     )

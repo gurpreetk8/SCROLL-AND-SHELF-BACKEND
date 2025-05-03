@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import authenticate, login
 from django.views.decorators.http import require_http_methods
+from django.db.models import Avg 
 
 from users.models import CustomUser
 from ebooks.models import Series, Ebook, Category, ReviewRating,Wishlist 
@@ -362,7 +363,7 @@ def get_book_reviews(request):
             })
         
         # Calculate average rating
-        avg_rating = reviews.aggregate(Avg('rating'))['rating__avg'] or 0 # type: ignore
+        avg_rating = reviews.aggregate(Avg('rating'))['rating__avg'] or 0 
         
         return JsonResponse({
             'success': True,
