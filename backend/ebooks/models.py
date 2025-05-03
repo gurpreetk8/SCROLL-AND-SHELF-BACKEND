@@ -27,6 +27,13 @@ class Series(models.Model):
     def __str__(self):
         return self.name
 
+class Tag(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+
+    def __str__(self):
+        return self.name
+
+
 class Ebook(models.Model):
     BOOK_TYPE_CHOICES = [
         ('standalone', 'Standalone'),
@@ -49,17 +56,22 @@ class Ebook(models.Model):
     title = models.CharField(max_length=255)
     author = models.CharField(max_length=255)
     description = models.TextField()
+    
     cover_image = models.ImageField(upload_to="ebooks/covers/")
     file = models.FileField(upload_to="ebooks/files/")
     created_at = models.DateTimeField(auto_now_add=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='ebooks')
+
     best_seller = models.BooleanField(default=False)
     best_of_month = models.BooleanField(default=False)
     trending = models.BooleanField(default=False)
 
+    # ✅ Add ManyToManyField here:
+    tags = models.ManyToManyField(Tag, related_name='ebooks', blank=True)
+
     def __str__(self):
         return self.title
-
+    
 class Wishlist(models.Model):
     user = models.ForeignKey('users.CustomUser', on_delete=models.CASCADE)
     ebook = models.ForeignKey(Ebook, on_delete=models.CASCADE)
