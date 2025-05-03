@@ -273,7 +273,12 @@ def get_ebook_detail(request):
                     'id': ebook.series.id if ebook.series else None,
                     'name': ebook.series.name if ebook.series else None,
                     'order': ebook.series_order
-                } if ebook.book_type == 'series' else None
+                } if ebook.book_type == 'series' else None,
+                'review_stats': {
+                'average_rating': ReviewRating.objects.filter(ebook=ebook).aggregate(Avg('rating'))['rating__avg'] or 0,
+                'total_reviews': ReviewRating.objects.filter(ebook=ebook).count()
+                }
+            
             
         }
         if user.is_subscribed:
