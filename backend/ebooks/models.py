@@ -1,4 +1,5 @@
 from django.db import models
+from django.forms import ValidationError
 
 class Category(models.Model):
     TYPE_CHOICES = [
@@ -61,6 +62,45 @@ class Wishlist(models.Model):
     user = models.ForeignKey('users.CustomUser', on_delete=models.CASCADE)
     ebook = models.ForeignKey(Ebook, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
+
+class ReviewRating(models.Model):
+    user = models.ForeignKey('users.CustomUser', on_delete=models.CASCADE)
+    ebook = models.ForeignKey(Ebook, on_delete=models.CASCADE, related_name='reviews_ratings')
+    
+    # Rating (required if review exists, but can also exist alone)
+    rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)], # type: ignore
+        null=True,  # Optional if user only wants to review (but we'll enforce via clean())
+        blank=True
+    )
+    
+    # Review (optional)
+    review_text = models.TextField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['user', 'ebook']  # One rating/review per user per book
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.email} - {self.ebook.title} ({self.rating or 'No rating'})"
+
+    def clean(self):
+        """
+        Ensure:
+        1. If review_text exists, rating must exist.
+        2. At least one of rating or review_text must exist.
+        """
+        if self.review_text and not self.rating:
+            raise ValidationError("A rating is required when submitting a review.")
+        if not self.rating and not self.review_text:
+            raise ValidationError("Either a rating or review must be provided.")
+    
+    def save(self, *args, **kwargs):
+        self.full_clean()  # Enforce validation on save
+        super().save(*args, **kwargs)
 
 class SampleImage(models.Model):
     ebook = models.ForeignKey(Ebook, on_delete=models.CASCADE, related_name='sample_images')

@@ -1,6 +1,7 @@
+from traceback import format_tb
 from django.contrib import admin
 
-from backend.ebooks.models import Series, SeriesImage
+from backend.ebooks.models import ReviewRating,Series, SeriesImage
 from .models import Series,Ebook, Category, SampleImage
 
 class CategoryAdmin(admin.ModelAdmin):
@@ -44,8 +45,60 @@ class EbookAdmin(admin.ModelAdmin):
         if obj.series:
             return f"{obj.series.name} (#{obj.series_order})"
         return "Standalone"
+    
+class ReviewRatingAdmin(admin.ModelAdmin):
+    list_display = ('user_email', 'ebook_title', 'rating_stars', 'review_preview', 'created_at', 'updated_at')
+    list_filter = ('rating', 'created_at', 'ebook')
+    search_fields = ('user__email', 'user__first_name', 'user__last_name','ebook__title','review_text')
+    readonly_fields = ('created_at', 'updated_at')
+    list_per_page = 20
+    date_hierarchy = 'created_at'
+    fieldsets = (
+        ('Relations', {
+            'fields': ('user', 'ebook')
+        }),
+        ('Review Content', {
+            'fields': ('rating', 'review_text')
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+
+    def user_email(self, obj):
+        return obj.user.email
+    user_email.short_description = 'User'
+    user_email.admin_order_field = 'user__email'
+
+    def ebook_title(self, obj):
+        return obj.ebook.title
+    ebook_title.short_description = 'Ebook'
+    ebook_title.admin_order_field = 'ebook__title'
+
+    def rating_stars(self, obj):
+        if not obj.rating:
+            return "No rating"
+        return format_tb(
+            '<span style="color: #f39c12;">{}</span>', 
+            '★' * obj.rating + '☆' * (5 - obj.rating)
+        )
+    rating_stars.short_description = 'Rating'
+
+    def review_preview(self, obj):
+        if not obj.review_text:
+            return "-"
+        preview = obj.review_text[:50]
+        if len(obj.review_text) > 50:
+            preview += "..."
+        return preview
+    review_preview.short_description = 'Review Preview'
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user', 'ebook')
 
 
 admin.site.register(Category, CategoryAdmin)
 admin.site.register(Ebook, EbookAdmin)
 admin.site.register(Series, SeriesAdmin)
+admin.site.register(ReviewRating, ReviewRatingAdmin)

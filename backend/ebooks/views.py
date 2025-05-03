@@ -6,7 +6,7 @@ from django.contrib.auth import authenticate, login
 from django.views.decorators.http import require_http_methods
 
 from users.models import CustomUser
-from ebooks.models import Series, Ebook, Category, Wishlist 
+from ebooks.models import Series, Ebook, Category, ReviewRating,Wishlist 
 
 from users.utils import jwt_encode, jwt_decode, auth_user
 
@@ -337,6 +337,146 @@ def get_all_series(request):
         })
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+@csrf_exempt
+def get_book_reviews(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        ebook_id = data.get('ebook_id')
+        reviews = ReviewRating.objects.filter(ebook_id=ebook_id).select_related('user').order_by('-created_at')
+        
+        review_list = []
+        for review in reviews:
+            review_list.append({
+                'id': review.id,
+                'user': {
+                    'email': review.user.email,
+                    'name': f"{review.user.first_name} {review.user.last_name}"
+                },
+                'rating': review.rating,
+                'review_text': review.review_text,
+                'created_at': review.created_at
+            })
+        
+        # Calculate average rating
+        avg_rating = reviews.aggregate(Avg('rating'))['rating__avg'] or 0 # type: ignore
+        
+        return JsonResponse({
+            'success': True,
+            'reviews': review_list,
+            'average_rating': round(avg_rating, 1),
+            'total_reviews': len(review_list)
+        }, status=200)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
+
+@csrf_exempt
+def submit_review(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
+
+    bearer = request.headers.get('Authorization')
+    if not bearer:
+        return JsonResponse({'success': False, 'message': 'Authentication required.'}, status=401)
+    
+    token = bearer.split()[1]
+    if not auth_user(token):
+        return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
+    
+    try:
+        decoded = jwt_decode(token)
+        user = CustomUser.objects.get(email=decoded.get('email'))
+        data = json.loads(request.body)
+        
+        ebook_id = data.get('ebook_id')
+        rating = data.get('rating')
+        review_text = data.get('review_text', '').strip()
+
+        # Validate at least rating exists
+        if not rating:
+            return JsonResponse({'success': False, 'message': 'Rating is required.'}, status=400)
+
+        # Create or update review
+        review, created = ReviewRating.objects.update_or_create(
+            user=user,
+            ebook_id=ebook_id,
+            defaults={
+                'rating': rating,
+                'review_text': review_text if review_text else None
+            }
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Review submitted successfully!',
+            'action': 'created' if created else 'updated'
+        }, status=201)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
+
+@csrf_exempt
+def delete_review(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
+
+    bearer = request.headers.get('Authorization')
+    if not bearer:
+        return JsonResponse({'success': False, 'message': 'Authentication required.'}, status=401)
+    
+    token = bearer.split()[1]
+    if not auth_user(token):
+        return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
+    
+    try:
+        decoded = jwt_decode(token)
+        user = CustomUser.objects.get(email=decoded.get('email'))
+        data = json.loads(request.body)
+        review_id = data.get('review_id')
+        
+        ReviewRating.objects.filter(id=review_id, user=user).delete()
+        return JsonResponse({'success': True, 'message': 'Review deleted.'}, status=200)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
+
+@csrf_exempt
+def get_user_review(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
+
+    bearer = request.headers.get('Authorization')
+    if not bearer:
+        return JsonResponse({'success': False, 'message': 'Authentication required.'}, status=401)
+    
+    token = bearer.split()[1]
+    if not auth_user(token):
+        return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
+    
+    try:
+        decoded = jwt_decode(token)
+        user = CustomUser.objects.get(email=decoded.get('email'))
+        data = json.loads(request.body)
+        ebook_id = data.get('ebook_id')
+        
+        review = ReviewRating.objects.filter(user=user, ebook_id=ebook_id).first()
+        
+        if not review:
+            return JsonResponse({'success': True, 'has_review': False}, status=200)
+        
+        return JsonResponse({
+            'success': True,
+            'has_review': True,
+            'review': {
+                'id': review.id,
+                'rating': review.rating,
+                'review_text': review.review_text,
+                'created_at': review.created_at
+            }
+        }, status=200)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
 
 @csrf_exempt
 def add_to_wishlist(request):
