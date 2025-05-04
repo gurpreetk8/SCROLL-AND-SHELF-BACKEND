@@ -7,7 +7,7 @@ from django.contrib.auth import authenticate, login
 from django.views.decorators.http import require_http_methods
 from django.db.models import Avg, Q, Count
 from django.core.cache import cache
-from backend.backend import settings
+from django.conf import settings
 from users.models import CustomUser
 from ebooks.models import Series, UserBook,Ebook, Category, ReviewRating,Wishlist 
 from django.utils import timezone
