@@ -739,13 +739,6 @@ def remove_from_wishlist(request):
             status=500
         )
     
-from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
-from django.utils import timezone
-import json
-from .models import CustomUser, Ebook, UserBook  # Update with your actual app's import path
-from .auth import auth_user, jwt_decode  # Make sure these are correctly imported
-
 @csrf_exempt
 def add_reading_book(request):
     if request.method != 'POST':
