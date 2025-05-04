@@ -7,6 +7,8 @@ from django.views.decorators.http import require_http_methods
 
 from users.models import CustomUser
 from subscriptions.models import Subscription
+from datetime import timedelta
+from django.utils import timezone
 
 from users.utils import jwt_encode, jwt_decode, auth_user
 
@@ -36,13 +38,32 @@ def pre_book_subscription(request):
         return JsonResponse({
             'success': True,
             'message': 'Subscription already created.',
-            'subscription_id': subscription.id
+            'subscription_id': subscription.id,
+            'start_date': subscription.start_date.isoformat() if subscription.start_date else None,
+            'end_date': subscription.end_date.isoformat() if subscription.end_date else None
         }, status=200)
 
-    subscription = Subscription.objects.create(user=user)
+    # Get subscription duration from request (default to 30 days if not provided)
+    try:
+        data = json.loads(request.body)
+        duration_days = int(data.get('duration_days', 30))
+    except (json.JSONDecodeError, ValueError):
+        duration_days = 30
+
+    now = timezone.now()
+    end_date = now + timedelta(days=duration_days)
+
+    subscription = Subscription.objects.create(
+        user=user,
+        start_date=now,
+        end_date=end_date,
+        is_active=True
+    )
 
     return JsonResponse({
         'success': True,
-        'message': 'Subscription pre-booked successfully.',
-        'subscription_id': subscription.id
+        'message': 'Subscription created successfully.',
+        'subscription_id': subscription.id,
+        'start_date': subscription.start_date.isoformat(),
+        'end_date': subscription.end_date.isoformat()
     }, status=200)
