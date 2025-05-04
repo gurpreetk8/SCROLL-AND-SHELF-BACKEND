@@ -511,88 +511,229 @@ def get_user_review(request):
 @csrf_exempt
 def add_to_wishlist(request):
     if request.method != 'POST':
-        return JsonResponse({'success': False, 'message': 'Use POST method.'}, status=405)
+        return JsonResponse(
+            {'success': False, 'message': 'Use POST method.'}, 
+            status=405
+        )
 
+    # Authentication
     bearer = request.headers.get('Authorization', '')
     if not bearer.startswith('Bearer '):
-        return JsonResponse({'success': False, 'message': 'Authorization token missing or invalid.'}, status=401)
-
-    token = bearer.split(' ')[1]
-    if not auth_user(token):
-        return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
+        return JsonResponse(
+            {'success': False, 'message': 'Authorization token missing or invalid.'}, 
+            status=401
+        )
 
     try:
+        token = bearer.split(' ')[1]
+        if not auth_user(token):
+            return JsonResponse(
+                {'success': False, 'message': 'Invalid or expired token.'}, 
+                status=401
+            )
+
+        # Get user
         decoded = jwt_decode(token)
-        user = CustomUser.objects.get(email=decoded.get('email'))
-        data = json.loads(request.body)
-        ebook_id = data.get('ebook_id')
+        try:
+            user = CustomUser.objects.get(email=decoded.get('email'))
+        except CustomUser.DoesNotExist:
+            return JsonResponse(
+                {'success': False, 'message': 'User not found.'}, 
+                status=404
+            )
 
-        ebook = Ebook.objects.get(id=ebook_id)
+        # Validate request data
+        try:
+            data = json.loads(request.body)
+            ebook_id = data.get('ebook_id')
+            if not ebook_id:
+                return JsonResponse(
+                    {'success': False, 'message': 'ebook_id is required.'},
+                    status=400
+                )
+        except json.JSONDecodeError:
+            return JsonResponse(
+                {'success': False, 'message': 'Invalid JSON data.'},
+                status=400
+            )
 
-        created = Wishlist.objects.get_or_create(user=user, ebook=ebook)
-        if created:
-            return JsonResponse({'success': True, 'message': 'Added to wishlist.'}, status=201)
-        else:
-            return JsonResponse({'success': False, 'message': 'Already in wishlist.'}, status=200)
+        # Get ebook and add to wishlist
+        try:
+            ebook = Ebook.objects.get(id=ebook_id)
+            wishlist_item, created = Wishlist.objects.get_or_create(
+                user=user,
+                ebook=ebook
+            )
+            
+            if created:
+                return JsonResponse(
+                    {
+                        'success': True, 
+                        'message': 'Added to wishlist.',
+                        'wishlist_id': wishlist_item.id
+                    }, 
+                    status=201
+                )
+            return JsonResponse(
+                {
+                    'success': True, 
+                    'message': 'Already in wishlist.',
+                    'wishlist_id': wishlist_item.id
+                }, 
+                status=200
+            )
 
-    except Ebook.DoesNotExist:
-        return JsonResponse({'success': False, 'message': 'Ebook not found.'}, status=404)
+        except Ebook.DoesNotExist:
+            return JsonResponse(
+                {'success': False, 'message': 'Ebook not found.'}, 
+                status=404
+            )
+
     except Exception as e:
-        return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
-    
+        return JsonResponse(
+            {'success': False, 'message': 'Internal server error.'},
+            status=500
+        )
 @csrf_exempt
 def get_wishlist(request):
     if request.method != 'POST':
-        return JsonResponse({'success': False, 'message': 'Use POST method.'}, status=405)
+        return JsonResponse(
+            {'success': False, 'message': 'Use POST method.'}, 
+            status=405
+        )
 
+    # Authentication
     bearer = request.headers.get('Authorization', '')
     if not bearer.startswith('Bearer '):
-        return JsonResponse({'success': False, 'message': 'Authorization token missing or invalid.'}, status=401)
-
-    token = bearer.split(' ')[1]
-    if not auth_user(token):
-        return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
+        return JsonResponse(
+            {'success': False, 'message': 'Authorization token missing or invalid.'}, 
+            status=401
+        )
 
     try:
+        token = bearer.split(' ')[1]
+        if not auth_user(token):
+            return JsonResponse(
+                {'success': False, 'message': 'Invalid or expired token.'}, 
+                status=401
+            )
+
+        # Get user
         decoded = jwt_decode(token)
-        user = CustomUser.objects.get(email=decoded.get('email'))
-        wishlist_items = Wishlist.objects.filter(user=user).select_related('ebook')
-        
+        try:
+            user = CustomUser.objects.get(email=decoded.get('email'))
+        except CustomUser.DoesNotExist:
+            return JsonResponse(
+                {'success': False, 'message': 'User not found.'}, 
+                status=404
+            )
+
+        # Get wishlist with optimized query
+        wishlist_items = Wishlist.objects.filter(user=user)\
+                          .select_related('ebook')\
+                          .only('ebook__id', 'ebook__title', 'ebook__author', 
+                                'ebook__cover_image', 'ebook__created_at')
+
         ebooks = [{
             'id': item.ebook.id,
             'title': item.ebook.title,
             'author': item.ebook.author,
-            'cover_image': str(item.ebook.cover_image.url),
-            'created_at': item.ebook.created_at
+            'cover_image': request.build_absolute_uri(item.ebook.cover_image.url),
+            'created_at': item.ebook.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'added_to_wishlist': item.created_at.strftime('%Y-%m-%d %H:%M:%S')
         } for item in wishlist_items]
 
-        return JsonResponse({'success': True, 'wishlist': ebooks}, status=200)
+        return JsonResponse(
+            {
+                'success': True, 
+                'count': len(ebooks),
+                'wishlist': ebooks
+            }, 
+            status=200
+        )
 
     except Exception as e:
-        return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
+        logger.error(f"Error fetching wishlist: {str(e)}")  # Add logging
+        return JsonResponse(
+            {'success': False, 'message': 'Could not fetch wishlist.'},
+            status=500
+        )
     
 @csrf_exempt
 def remove_from_wishlist(request):
     if request.method != 'POST':
-        return JsonResponse({'success': False, 'message': 'Use POST method.'}, status=405)
+        return JsonResponse(
+            {'success': False, 'message': 'Use POST method.'}, 
+            status=405
+        )
 
+    # Authentication
     bearer = request.headers.get('Authorization', '')
     if not bearer.startswith('Bearer '):
-        return JsonResponse({'success': False, 'message': 'Authorization token missing or invalid.'}, status=401)
-
-    token = bearer.split(' ')[1]
-    if not auth_user(token):
-        return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
+        return JsonResponse(
+            {'success': False, 'message': 'Authorization token missing or invalid.'}, 
+            status=401
+        )
 
     try:
+        token = bearer.split(' ')[1]
+        if not auth_user(token):
+            return JsonResponse(
+                {'success': False, 'message': 'Invalid or expired token.'}, 
+                status=401
+            )
+
+        # Get user
         decoded = jwt_decode(token)
-        user = CustomUser.objects.get(email=decoded.get('email'))
-        data = json.loads(request.body)
-        ebook_id = data.get('ebook_id')
+        try:
+            user = CustomUser.objects.get(email=decoded.get('email'))
+        except CustomUser.DoesNotExist:
+            return JsonResponse(
+                {'success': False, 'message': 'User not found.'}, 
+                status=404
+            )
 
-        Wishlist.objects.filter(user=user, ebook_id=ebook_id).delete()
+        # Validate request data
+        try:
+            data = json.loads(request.body)
+            ebook_id = data.get('ebook_id')
+            if not ebook_id:
+                return JsonResponse(
+                    {'success': False, 'message': 'ebook_id is required.'},
+                    status=400
+                )
+        except json.JSONDecodeError:
+            return JsonResponse(
+                {'success': False, 'message': 'Invalid JSON data.'},
+                status=400
+            )
 
-        return JsonResponse({'success': True, 'message': 'Removed from wishlist.'}, status=200)
+        # Verify ebook exists
+        if not Ebook.objects.filter(id=ebook_id).exists():
+            return JsonResponse(
+                {'success': False, 'message': 'Ebook not found.'},
+                status=404
+            )
+
+        # Remove from wishlist
+        deleted_count, _ = Wishlist.objects.filter(
+            user=user, 
+            ebook_id=ebook_id
+        ).delete()
+
+        if deleted_count > 0:
+            return JsonResponse(
+                {'success': True, 'message': 'Removed from wishlist.'},
+                status=200
+            )
+        return JsonResponse(
+            {'success': False, 'message': 'Item not found in wishlist.'},
+            status=404
+        )
 
     except Exception as e:
-        return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=400)
+        logger.error(f"Error removing from wishlist: {str(e)}")  # Add logging
+        return JsonResponse(
+            {'success': False, 'message': 'Could not remove from wishlist.'},
+            status=500
+        )
