@@ -26,5 +26,8 @@ urlpatterns = [
 
     path('add_reading_book/', views.add_reading_book, name='add_reading_book'),
     path('get_reading_books/', views.get_reading_books, name='get_reading_books'),
+
+    path('recommend_books/', views.recommend_books, name='recommend_books'),
+    
     
 ]

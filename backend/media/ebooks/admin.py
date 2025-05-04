@@ -71,7 +71,7 @@ class UserBookAdmin(admin.ModelAdmin):
     reading_duration.short_description = 'Duration'
 
 class EbookAdmin(admin.ModelAdmin):
-    list_display = ('title', 'author', 'book_type', 'display_tags', 'series_info', 'created_at', 'categories', 'reading_count')
+    list_display = ('title', 'author', 'book_type', 'display_tags', 'series_info', 'series_order', 'created_at', 'categories', 'reading_count')
     search_fields = ('title', 'author', 'description', 'tags')
     list_filter = ('created_at', 'book_type', 'series', 'category')
     ordering = ('-created_at',)

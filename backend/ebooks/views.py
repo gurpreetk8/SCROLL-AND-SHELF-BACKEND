@@ -856,3 +856,89 @@ def get_reading_books(request):
         
     except Exception as e:
         return JsonResponse({'success': False, 'message': f'Error: {str(e)}'}, status=500)
+
+# views.py
+from django.db.models import Q
+
+@csrf_exempt
+def recommend_books(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Use POST.'}, status=405)
+
+    try:
+        # Auth (reuse your existing middleware if possible)
+        bearer = request.headers.get('Authorization')
+        token = bearer.split()[1]
+        if not auth_user(token):
+            return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
+        
+        decoded = jwt_decode(token)
+        user = CustomUser.objects.get(email=decoded.get('email'))
+
+        # Fetch user's wishlist and reading books
+        wishlist_ids = Wishlist.objects.filter(user=user).values_list('ebook_id', flat=True)
+        reading_book_ids = UserBook.objects.filter(user=user, status='reading').values_list('book_id', flat=True)
+        
+        # Get ebook details (optimized query)
+        wishlist_books = Ebook.objects.filter(id__in=wishlist_ids).values('id', 'title', 'author', 'series_id', 'series_order')
+        reading_books = Ebook.objects.filter(id__in=reading_book_ids).values('id', 'title', 'author', 'series_id', 'series_order')
+
+        recommendations = []
+
+        # Rule 1: Series continuation
+        for book in reading_books:
+            if book['series_id']:
+                next_in_series = Ebook.objects.filter(
+                    series_id=book['series_id'],
+                    series_order=book['series_order'] + 1
+                ).exclude(id__in=wishlist_ids).exclude(id__in=reading_book_ids).first()
+                if next_in_series:
+                    recommendations.append({
+                        'id': next_in_series.id,
+                        'title': next_in_series.title,
+                        'author': next_in_series.author,
+                        'reason': 'Next in series'
+                    })
+
+        # Rule 2: Same author (exclude wishlist/reading)
+        if len(recommendations) < 5:
+            authors = set()
+            for book in wishlist_books:
+                authors.add(book['author'])
+            for book in reading_books:
+                authors.add(book['author'])
+            
+            for author in authors:
+                author_books = Ebook.objects.filter(
+                    author=author
+                ).exclude(
+                    Q(id__in=wishlist_ids) | Q(id__in=reading_book_ids)
+                )[:3]  # Limit to 3 per author
+                for book in author_books:
+                    recommendations.append({
+                        'id': book.id,
+                        'title': book.title,
+                        'author': book.author,
+                        'reason': 'Same author'
+                    })
+
+        # Rule 3: Popular fallback (example: highest-rated)
+        if not recommendations:
+            popular_books = Ebook.objects.annotate(
+                avg_rating=Avg('reviews__rating')
+            ).order_by('-avg_rating')[:10]
+            for book in popular_books:
+                recommendations.append({
+                    'id': book.id,
+                    'title': book.title,
+                    'author': book.author,
+                    'reason': 'Popular'
+                })
+
+        return JsonResponse({
+            'success': True,
+            'recommendations': recommendations[:10]  # Return top 10
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
