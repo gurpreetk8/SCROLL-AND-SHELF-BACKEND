@@ -739,6 +739,13 @@ def remove_from_wishlist(request):
             status=500
         )
     
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from django.utils import timezone
+import json
+from .models import CustomUser, Ebook, UserBook  # Update with your actual app's import path
+from .auth import auth_user, jwt_decode  # Make sure these are correctly imported
+
 @csrf_exempt
 def add_reading_book(request):
     if request.method != 'POST':
@@ -761,46 +768,45 @@ def add_reading_book(request):
             user = CustomUser.objects.get(email=user_email)
         except CustomUser.DoesNotExist:
             return JsonResponse({'success': False, 'message': 'User not found.'}, status=404)
-            
-        # Process request
+        
+        # Parse body and get ebook
         data = json.loads(request.body)
-        book_id = data.get('book_id')
-        
-        if not book_id:
-            return JsonResponse({'success': False, 'message': 'book_id is required'}, status=400)
-        
+        ebook_id = data.get('id')
+
+        if not ebook_id:
+            return JsonResponse({'success': False, 'message': 'id (ebook_id) is required'}, status=400)
+
         try:
-            book = book.objects.get(pk=book_id)
-        except book.DoesNotExist:
+            ebook = Ebook.objects.get(id=ebook_id)
+        except Ebook.DoesNotExist:
             return JsonResponse({'success': False, 'message': 'Book not found'}, status=404)
-        
-        # Get or create the UserBook record
+
+        # Create or update reading status
         user_book, created = UserBook.objects.get_or_create(
             user=user,
-            book=book,
+            book=ebook,
             defaults={
                 'status': 'reading',
                 'started_reading': timezone.now()
             }
         )
-        
+
         if not created:
-            # Update existing record
             user_book.status = 'reading'
             user_book.save()
-        
+
         return JsonResponse({
             'success': True,
             'message': 'Book added to reading list successfully',
             'data': {
-                'book_id': book.id,
-                'title': book.title,
+                'book_id': ebook.id,
+                'title': ebook.title,
                 'status': user_book.status,
-                'last_read': user_book.last_read.isoformat(),
-                'started_reading': user_book.started_reading.isoformat()
+                'last_read': user_book.last_read.isoformat() if user_book.last_read else None,
+                'started_reading': user_book.started_reading.isoformat() if user_book.started_reading else None
             }
         }, status=201 if created else 200)
-        
+
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
     except Exception as e:
