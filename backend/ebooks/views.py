@@ -840,7 +840,7 @@ def get_reading_books(request):
             books_data.append({
                 'id': book.id,
                 'title': book.title,
-                'author': book.author.name if hasattr(book, 'author') and book.author else None,
+                'author': book.author,
                 'cover_image': request.build_absolute_uri(book.cover_image.url) if book.cover_image else None,
                 'started_reading': user_book.started_reading.isoformat(),
                 'last_read': user_book.last_read.isoformat(),
