@@ -1,3 +1,4 @@
+from datetime import timezone
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator  # Add this line
 from django.core.exceptions import ValidationError  # Also needed for clean()
@@ -88,6 +89,27 @@ class Wishlist(models.Model):
     user = models.ForeignKey('users.CustomUser', on_delete=models.CASCADE)
     ebook = models.ForeignKey(Ebook, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
+
+class UserBook(models.Model):
+    READING_STATUS = [
+        ('reading', 'Currently Reading'),
+        ('completed', 'Finished Reading'),
+        ('paused', 'Paused Reading'),
+    ]
+
+    user = models.ForeignKey('users.CustomUser', on_delete=models.CASCADE)
+    book = models.ForeignKey(Ebook, on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=READING_STATUS, default='reading')
+    started_reading = models.DateTimeField(default=timezone.now)
+    last_read = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'book')  # Prevent duplicate entries
+        ordering = ['-last_read']  # Most recently read books first
+
+    def __str__(self):
+        return f"{self.user.username} - {self.book.title} ({self.status})"
 
 class ReviewRating(models.Model):
     user = models.ForeignKey('users.CustomUser', on_delete=models.CASCADE)

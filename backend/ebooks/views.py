@@ -1,4 +1,5 @@
 import json
+from venv import logger
 from django.contrib.auth.hashers import make_password
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -7,8 +8,8 @@ from django.views.decorators.http import require_http_methods
 from django.db.models import Avg 
 
 from users.models import CustomUser
-from ebooks.models import Series, Ebook, Category, ReviewRating,Wishlist 
-
+from ebooks.models import Series, UserBook,Ebook, Category, ReviewRating,Wishlist 
+from datetime import datetime, timezone
 from users.utils import jwt_encode, jwt_decode, auth_user
 
 from django.forms.models import model_to_dict
@@ -737,3 +738,122 @@ def remove_from_wishlist(request):
             {'success': False, 'message': 'Could not remove from wishlist.'},
             status=500
         )
+    
+@csrf_exempt
+def add_reading_book(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
+
+    try:
+        # Authentication
+        bearer = request.headers.get('Authorization')
+        if not bearer:
+            return JsonResponse({'success': False, 'message': 'Authentication header is required.'}, status=401)
+        
+        token = bearer.split()[1]
+        if not auth_user(token):
+            return JsonResponse({'success': False, 'message': 'Invalid token data.'}, status=401)
+        
+        decoded_token = jwt_decode(token)
+        user_email = decoded_token.get('email')
+
+        try:
+            user = CustomUser.objects.get(email=user_email)
+        except CustomUser.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'User not found.'}, status=404)
+            
+        # Process request
+        data = json.loads(request.body)
+        book_id = data.get('book_id')
+        
+        if not book_id:
+            return JsonResponse({'success': False, 'message': 'book_id is required'}, status=400)
+        
+        try:
+            book = book.objects.get(pk=book_id)
+        except book.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'Book not found'}, status=404)
+        
+        # Get or create the UserBook record
+        user_book, created = UserBook.objects.get_or_create(
+            user=user,
+            book=book,
+            defaults={
+                'status': 'reading',
+                'started_reading': datetime.now()
+            }
+        )
+        
+        if not created:
+            # Update existing record
+            user_book.status = 'reading'
+            user_book.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Book added to reading list successfully',
+            'data': {
+                'book_id': book.id,
+                'title': book.title,
+                'status': user_book.status,
+                'last_read': user_book.last_read.isoformat(),
+                'started_reading': user_book.started_reading.isoformat()
+            }
+        }, status=201 if created else 200)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error: {str(e)}'}, status=500)
+
+@csrf_exempt
+def get_reading_books(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
+
+    try:
+        # Authentication
+        bearer = request.headers.get('Authorization')
+        if not bearer:
+            return JsonResponse({'success': False, 'message': 'Authentication header is required.'}, status=401)
+        
+        token = bearer.split()[1]
+        if not auth_user(token):
+            return JsonResponse({'success': False, 'message': 'Invalid token data.'}, status=401)
+        
+        decoded_token = jwt_decode(token)
+        user_email = decoded_token.get('email')
+
+        try:
+            user = CustomUser.objects.get(email=user_email)
+        except CustomUser.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'User not found.'}, status=404)
+            
+        # Get reading books
+        reading_books = UserBook.objects.filter(
+            user=user,
+            status='reading'
+        ).select_related('book').order_by('-last_read')
+        
+        books_data = []
+        for user_book in reading_books:
+            book = user_book.book
+            books_data.append({
+                'id': book.id,
+                'title': book.title,
+                'author': book.author.name if hasattr(book, 'author') and book.author else None,
+                'cover_image': request.build_absolute_uri(book.cover_image.url) if book.cover_image else None,
+                'started_reading': user_book.started_reading.isoformat(),
+                'last_read': user_book.last_read.isoformat(),
+                'status': user_book.status
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Reading books fetched successfully',
+            'count': len(books_data),
+            'books': books_data
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error: {str(e)}'}, status=500)
