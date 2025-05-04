@@ -1,4 +1,4 @@
-from datetime import timezone
+from django.utils import timezone
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator  # Add this line
 from django.core.exceptions import ValidationError  # Also needed for clean()

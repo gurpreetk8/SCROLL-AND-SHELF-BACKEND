@@ -9,7 +9,7 @@ from django.db.models import Avg
 
 from users.models import CustomUser
 from ebooks.models import Series, UserBook,Ebook, Category, ReviewRating,Wishlist 
-from datetime import datetime, timezone
+from django.utils import timezone
 from users.utils import jwt_encode, jwt_decode, auth_user
 
 from django.forms.models import model_to_dict
@@ -780,7 +780,7 @@ def add_reading_book(request):
             book=book,
             defaults={
                 'status': 'reading',
-                'started_reading': datetime.now()
+                'started_reading': timezone.now()
             }
         )
         
