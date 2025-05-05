@@ -867,138 +867,86 @@ def recommend_books(request):
         return JsonResponse({'success': False, 'message': 'Use POST.'}, status=405)
 
     try:
-        # Authentication
+        # Authentication using your custom utils
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
             return JsonResponse({'success': False, 'message': 'Authorization required.'}, status=401)
             
         token = auth_header.split()[1]
-        try:
-            decoded = jwt_decode(token, settings.SECRET_KEY, algorithms=['HS256'])
-            user = CustomUser.objects.get(email=decoded.get('email'))
-        except (jwt_decode.InvalidTokenError, CustomUser.DoesNotExist):
+        if not auth_user(token):  # Using your custom auth_user
             return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
-
-        # User-specific cache key with versioning
-        cache_key = f'user_{user.id}_v2_recommendations'
-        cached_data = cache.get(cache_key)
         
-        if cached_data:
+        decoded = jwt_decode(token)  # Using your custom jwt_decode
+        user = CustomUser.objects.get(email=decoded.get('email'))
+
+        # Cache setup
+        cache_key = f'user_{user.id}_recommendations'
+        if cached_data := cache.get(cache_key):
             return JsonResponse({
                 'success': True,
                 'recommendations': cached_data,
-                'cached': True,
-                'generated_at': cache.ttl(cache_key)  # Time remaining in cache
+                'cached': True
             })
 
-        # Fetch user's data in optimized queries
+        # Fetch user data
         wishlist_ids = Wishlist.objects.filter(user=user).values_list('ebook_id', flat=True)
-        reading_data = UserBook.objects.filter(
-            user=user,
-            status__in=['reading', 'completed']
-        ).values_list('book_id', 'status')
-
-        reading_book_ids = [book_id for book_id, _ in reading_data]
-        completed_book_ids = [book_id for book_id, status in reading_data if status == 'completed']
-
-        # Get base book data in single queries
-        wishlist_books = Ebook.objects.filter(id__in=wishlist_ids).only(
-            'id', 'title', 'author', 'series_id', 'series_order', 'cover_url'
-        )
-        reading_books = Ebook.objects.filter(id__in=reading_book_ids).only(
-            'id', 'title', 'author', 'series_id', 'series_order', 'cover_url'
-        )
+        reading_books = UserBook.objects.filter(user=user, status='reading').values_list('book_id', flat=True)
 
         recommendations = []
-        seen_book_ids = set(wishlist_ids).union(reading_book_ids)
+        seen_ids = set(wishlist_ids).union(set(reading_books))
 
-        # Rule 1: Series continuation (prioritize reading over completed)
-        series_priority = []
-        for book in reading_books:
-            if book.series_id:
-                series_priority.append((book.series_id, book.series_order or 0))
+        # Rule 1: Series continuation
+        series_books = Ebook.objects.filter(
+            id__in=reading_books,
+            series_id__isnull=False
+        ).only('series_id', 'series_order')
         
-        for series_id, current_order in series_priority:
-            next_in_series = Ebook.objects.filter(
-                series_id=series_id,
-                series_order=current_order + 1
-            ).exclude(id__in=seen_book_ids).first()
+        for book in series_books:
+            next_book = Ebook.objects.filter(
+                series_id=book.series_id,
+                series_order=book.series_order + 1
+            ).exclude(id__in=seen_ids).first()
             
-            if next_in_series:
+            if next_book:
                 recommendations.append({
-                    'id': next_in_series.id,
-                    'title': next_in_series.title,
-                    'author': next_in_series.author,
-                    'cover': next_in_series.cover_url,
-                    'reason': 'Next in series',
-                    'priority': 1  # Highest priority
+                    'id': next_book.id,
+                    'title': next_book.title,
+                    'author': next_book.author,
+                    'cover': next_book.cover_url,
+                    'reason': 'Next in series'
                 })
-                seen_book_ids.add(next_in_series.id)
+                seen_ids.add(next_book.id)
 
-        # Rule 2: Same author (weighted by user's interaction)
-        author_weights = {}
-        for book in wishlist_books:
-            author_weights[book.author] = author_weights.get(book.author, 0) + 1
-        
-        for book in reading_books:
-            author_weights[book.author] = author_weights.get(book.author, 0) + 2
-        
-        # Get top 5 authors by weight
-        sorted_authors = sorted(author_weights.items(), key=lambda x: x[1], reverse=True)[:5]
-        
-        for author, weight in sorted_authors:
-            author_books = Ebook.objects.filter(
-                author=author
-            ).exclude(
-                id__in=seen_book_ids
-            ).order_by('-rating')[:2]  # Get 2 highest rated per author
-            
-            for book in author_books:
-                recommendations.append({
-                    'id': book.id,
-                    'title': book.title,
-                    'author': book.author,
-                    'cover': book.cover_url,
-                    'reason': f'More from {author}',
-                    'priority': 2
-                })
-                seen_book_ids.add(book.id)
-
-        # Rule 3: Similar genre (based on user's reading history)
+        # Rule 2: Same author
         if len(recommendations) < 10:
-            favorite_genres = Ebook.objects.filter(
-                id__in=reading_book_ids
-            ).values_list('genres__name', flat=True).distinct()
+            authors = Ebook.objects.filter(
+                id__in=reading_books
+            ).values_list('author', flat=True).distinct()
             
-            if favorite_genres:
-                similar_books = Ebook.objects.filter(
-                    genres__name__in=favorite_genres
-                ).exclude(
-                    id__in=seen_book_ids
-                ).annotate(
-                    rating_count=Count('reviews')
-                ).order_by('-rating', '-rating_count')[:5]
+            for author in authors:
+                author_books = Ebook.objects.filter(
+                    author=author
+                ).exclude(id__in=seen_ids).order_by('-rating')[:2]
                 
-                for book in similar_books:
+                for book in author_books:
                     recommendations.append({
                         'id': book.id,
                         'title': book.title,
                         'author': book.author,
                         'cover': book.cover_url,
-                        'reason': f'Similar to your {favorite_genres[0]} reads',
-                        'priority': 3
+                        'reason': f'More from {author}'
                     })
-                    seen_book_ids.add(book.id)
+                    seen_ids.add(book.id)
 
-        # Rule 4: Popular fallback (weighted by rating and review count)
+        # Rule 3: Popular fallback
         if len(recommendations) < 10:
             needed = 10 - len(recommendations)
             popular_books = Ebook.objects.annotate(
-                rating_count=Count('reviews'),
-                weighted_score=Avg('reviews__rating') * Q(Count('reviews'))
-            ).exclude(
-                id__in=seen_book_ids
-            ).order_by('-weighted_score')[:needed]
+                rating_avg=Avg('reviews__rating'),
+                review_count=Count('reviews')
+            ).exclude(id__in=seen_ids).order_by(
+                '-rating_avg', '-review_count'
+            )[:needed]
             
             for book in popular_books:
                 recommendations.append({
@@ -1006,42 +954,20 @@ def recommend_books(request):
                     'title': book.title,
                     'author': book.author,
                     'cover': book.cover_url,
-                    'reason': 'Popular in the community',
-                    'priority': 4
+                    'reason': 'Popular in community'
                 })
 
-        # Sort recommendations by priority and freshness
-        final_recommendations = sorted(
-            recommendations,
-            key=lambda x: (x['priority'], x.get('rating', 0)),
-        )[:10]
-
-        # Prepare response data
-        response_data = []
-        for rec in final_recommendations:
-            response_data.append({
-                'id': rec['id'],
-                'title': rec['title'],
-                'author': rec['author'],
-                'cover': rec.get('cover'),
-                'reason': rec['reason']
-            })
-
-        # Cache the results for 1 hour
-        cache.set(cache_key, response_data, timeout=3600)
-
+        # Cache and return
+        cache.set(cache_key, recommendations[:10], timeout=3600)
         return JsonResponse({
             'success': True,
-            'recommendations': response_data,
-            'cached': False,
-            'generated_at': 'fresh'
+            'recommendations': recommendations[:10],
+            'cached': False
         })
 
     except Exception as e:
-        # Log the full error for debugging
         import traceback
         traceback.print_exc()
-        
         return JsonResponse({
             'success': False,
             'message': 'Failed to generate recommendations',
