@@ -867,109 +867,50 @@ def recommend_books(request):
         return JsonResponse({'success': False, 'message': 'Use POST.'}, status=405)
 
     try:
-        # Authentication using your custom utils
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return JsonResponse({'success': False, 'message': 'Authorization required.'}, status=401)
-            
+        # 1. Authentication
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return JsonResponse({'success': False, 'message': 'Invalid auth header.'}, status=401)
+
         token = auth_header.split()[1]
-        if not auth_user(token):  # Using your custom auth_user
+        if not auth_user(token):  # Your custom auth check
             return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
-        
-        decoded = jwt_decode(token)  # Using your custom jwt_decode
+
+        # 2. Get user
+        decoded = jwt_decode(token)  # Your custom decode
         user = CustomUser.objects.get(email=decoded.get('email'))
 
-        # Cache setup
+        # 3. Check cache
         cache_key = f'user_{user.id}_recommendations'
         if cached_data := cache.get(cache_key):
-            return JsonResponse({
-                'success': True,
-                'recommendations': cached_data,
-                'cached': True
-            })
+            return JsonResponse({'success': True, 'recommendations': cached_data})
 
-        # Fetch user data
+        # 4. Generate recommendations
         wishlist_ids = Wishlist.objects.filter(user=user).values_list('ebook_id', flat=True)
-        reading_books = UserBook.objects.filter(user=user, status='reading').values_list('book_id', flat=True)
+        reading_ids = UserBook.objects.filter(user=user, status='reading').values_list('book_id', flat=True)
 
-        recommendations = []
-        seen_ids = set(wishlist_ids).union(set(reading_books))
+        # Fallback if no recommendations found
+        recommendations = list(
+            Ebook.objects.annotate(
+                score=Avg('reviews__rating') * Count('reviews')
+            )
+            .exclude(Q(id__in=wishlist_ids) | Q(id__in=reading_ids))
+            .order_by('-score')[:10]
+            .values('id', 'title', 'author', 'cover_url')
+        ) or [{
+            'id': 0,
+            'title': 'No recommendations found',
+            'author': 'Explore more books!',
+            'cover_url': None,
+            'reason': 'Add books to wishlist'
+        }]
 
-        # Rule 1: Series continuation
-        series_books = Ebook.objects.filter(
-            id__in=reading_books,
-            series_id__isnull=False
-        ).only('series_id', 'series_order')
-        
-        for book in series_books:
-            next_book = Ebook.objects.filter(
-                series_id=book.series_id,
-                series_order=book.series_order + 1
-            ).exclude(id__in=seen_ids).first()
-            
-            if next_book:
-                recommendations.append({
-                    'id': next_book.id,
-                    'title': next_book.title,
-                    'author': next_book.author,
-                    'cover': next_book.cover_url,
-                    'reason': 'Next in series'
-                })
-                seen_ids.add(next_book.id)
-
-        # Rule 2: Same author
-        if len(recommendations) < 10:
-            authors = Ebook.objects.filter(
-                id__in=reading_books
-            ).values_list('author', flat=True).distinct()
-            
-            for author in authors:
-                author_books = Ebook.objects.filter(
-                    author=author
-                ).exclude(id__in=seen_ids).order_by('-rating')[:2]
-                
-                for book in author_books:
-                    recommendations.append({
-                        'id': book.id,
-                        'title': book.title,
-                        'author': book.author,
-                        'cover': book.cover_url,
-                        'reason': f'More from {author}'
-                    })
-                    seen_ids.add(book.id)
-
-        # Rule 3: Popular fallback
-        if len(recommendations) < 10:
-            needed = 10 - len(recommendations)
-            popular_books = Ebook.objects.annotate(
-                rating_avg=Avg('reviews__rating'),
-                review_count=Count('reviews')
-            ).exclude(id__in=seen_ids).order_by(
-                '-rating_avg', '-review_count'
-            )[:needed]
-            
-            for book in popular_books:
-                recommendations.append({
-                    'id': book.id,
-                    'title': book.title,
-                    'author': book.author,
-                    'cover': book.cover_url,
-                    'reason': 'Popular in community'
-                })
-
-        # Cache and return
-        cache.set(cache_key, recommendations[:10], timeout=3600)
-        return JsonResponse({
-            'success': True,
-            'recommendations': recommendations[:10],
-            'cached': False
-        })
+        cache.set(cache_key, recommendations, timeout=3600)
+        return JsonResponse({'success': True, 'recommendations': recommendations})
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return JsonResponse({
-            'success': False,
-            'message': 'Failed to generate recommendations',
-            'error': str(e)
-        }, status=500)
+        logger.error(f"Recommendation error: {str(e)}", exc_info=True)
+        return JsonResponse(
+            {'success': False, 'message': 'Failed to generate recommendations'},
+            status=500
+        )
