@@ -741,6 +741,43 @@ def remove_from_wishlist(request):
         )
     
 @csrf_exempt
+def check_wishlist_status(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
+
+    try:
+        # Authentication
+        bearer = request.headers.get('Authorization')
+        if not bearer:
+            return JsonResponse({'success': False, 'message': 'Authentication header is required.'}, status=401)
+        
+        token = bearer.split()[1]
+        if not auth_user(token):
+            return JsonResponse({'success': False, 'message': 'Invalid token data.'}, status=401)
+        
+        data = json.loads(request.body)
+        ebook_id = data.get('ebook_id')
+        
+        decoded_token = jwt_decode(token)
+        user_email = decoded_token.get('email')
+
+        try:
+            user = CustomUser.objects.get(email=user_email)
+            wishlist_item = Wishlist.objects.filter(user=user, ebook_id=ebook_id).first()
+            
+            return JsonResponse({
+                'success': True,
+                'is_in_wishlist': wishlist_item is not None,
+                'wishlist_id': str(wishlist_item.id) if wishlist_item else None
+            })
+            
+        except CustomUser.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'User not found.'}, status=404)
+            
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error: {str(e)}'}, status=500)
+    
+@csrf_exempt
 def add_reading_book(request):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
