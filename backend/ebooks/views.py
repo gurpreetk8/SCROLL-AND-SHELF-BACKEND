@@ -858,47 +858,48 @@ def get_reading_books(request):
     except Exception as e:
         return JsonResponse({'success': False, 'message': f'Error: {str(e)}'}, status=500)
 
-# views.py
-from django.db.models import Q
+
 
 @csrf_exempt
 def recommend_books(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Use POST.'}, status=405)
+
     try:
-        # 1. Authentication
+        # Authentication
         token = request.headers.get('Authorization', '').split('Bearer ')[-1]
         if not token:
             return JsonResponse({'success': False, 'message': 'Token missing'}, status=401)
         
-        # 2. Get User
-        try:
-            decoded = jwt_decode(token)  # Your custom function
-            user = CustomUser.objects.get(email=decoded.get('email'))
-        except Exception as e:
-            logger.error(f"Auth error: {str(e)}")
+        # Verify token and get user
+        if not auth_user(token):
             return JsonResponse({'success': False, 'message': 'Invalid token'}, status=401)
+            
+        decoded = jwt_decode(token)
+        user = CustomUser.objects.get(email=decoded.get('email'))
 
-        # 3. Get Recommendations
+        # Get user's wishlist and reading books
         wishlist_ids = Wishlist.objects.filter(user=user).values_list('ebook_id', flat=True)
         reading_ids = UserBook.objects.filter(user=user, status='reading').values_list('book_id', flat=True)
 
-        # Basic recommendation logic
+        # Use correct field name (reviews_ratings instead of reviews)
         recommendations = list(
             Ebook.objects.annotate(
-                popularity=Count('reviews'),
-                avg_rating=Avg('reviews__rating')
+                avg_rating=Avg('reviews_ratings__rating'),
+                rating_count=Count('reviews_ratings')
             )
             .exclude(Q(id__in=wishlist_ids) | Q(id__in=reading_ids))
-            .order_by('-avg_rating', '-popularity')[:10]
-            .values('id', 'title', 'author', 'cover_url')
+            .order_by('-avg_rating', '-rating_count')[:10]
+            .values('id', 'title', 'author', 'cover_image')
         )
 
-        # Fallback if empty
+        # Fallback if no recommendations
         if not recommendations:
             recommendations = [{
                 'id': -1,
                 'title': 'No recommendations found',
-                'author': 'Try adding more books to your wishlist',
-                'cover_url': None
+                'author': 'Try adding more books',
+                'cover_image': None
             }]
 
         return JsonResponse({
@@ -907,9 +908,7 @@ def recommend_books(request):
         })
 
     except Exception as e:
-        logger.error(f"Recommendation error: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
-            'message': 'Failed to generate recommendations',
-            'error': str(e)  # Return actual error for debugging
+            'message': str(e)  # Return actual error message
         }, status=500)
