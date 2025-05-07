@@ -866,23 +866,23 @@ def recommend_books(request):
         return JsonResponse({'success': False, 'message': 'Use POST.'}, status=405)
 
     try:
-        # Authentication
+        # 1. Authentication
         token = request.headers.get('Authorization', '').split('Bearer ')[-1]
-        if not token:
-            return JsonResponse({'success': False, 'message': 'Token missing'}, status=401)
-        
-        # Verify token and get user
-        if not auth_user(token):
+        if not token or not auth_user(token):
             return JsonResponse({'success': False, 'message': 'Invalid token'}, status=401)
-            
+        
         decoded = jwt_decode(token)
         user = CustomUser.objects.get(email=decoded.get('email'))
 
-        # Get user's wishlist and reading books
+        # 2. Check cache first
+        cache_key = f'recs_{user.id}'
+        if cached_recs := cache.get(cache_key):
+            return JsonResponse({'success': True, 'recommendations': cached_recs})
+
+        # 3. Generate recommendations
         wishlist_ids = Wishlist.objects.filter(user=user).values_list('ebook_id', flat=True)
         reading_ids = UserBook.objects.filter(user=user, status='reading').values_list('book_id', flat=True)
 
-        # Use correct field name (reviews_ratings instead of reviews)
         recommendations = list(
             Ebook.objects.annotate(
                 avg_rating=Avg('reviews_ratings__rating'),
@@ -893,22 +893,24 @@ def recommend_books(request):
             .values('id', 'title', 'author', 'cover_image')
         )
 
-        # Fallback if no recommendations
+        # 4. Fallback if empty
         if not recommendations:
             recommendations = [{
                 'id': -1,
-                'title': 'No recommendations found',
-                'author': 'Try adding more books',
+                'title': 'Explore New Books',
+                'author': 'Add more to your wishlist',
                 'cover_image': None
             }]
 
-        return JsonResponse({
-            'success': True,
-            'recommendations': recommendations
-        })
+        # Cache for 1 hour
+        cache.set(cache_key, recommendations, timeout=3600)
+        
+        return JsonResponse({'success': True, 'recommendations': recommendations})
 
     except Exception as e:
+        logger.error(f"Recommendation error: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
-            'message': str(e)  # Return actual error message
+            'message': 'Failed to load recommendations',
+            'error': str(e)
         }, status=500)
