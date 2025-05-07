@@ -213,8 +213,17 @@ def edit_profile_picture_view(request):
         user.profile_picture.save(uploaded_image.name, uploaded_image)
         user.save()
         user_details = model_to_dict(user, exclude=['password'])
-        user_details['profile_picture'] = str(user.profile_picture)
-        return JsonResponse({"success": True, "message": "Profile picture edited successfully.", "user_details": user_details}, status=200)
+        
+        # Generate full URL for the profile picture
+        if user.profile_picture:
+            user_details['profile_picture'] = request.build_absolute_uri(user.profile_picture.url)
+        else:
+            user_details['profile_picture'] = None
+            
+        return JsonResponse({
+            "success": True, 
+            "message": "Profile picture edited successfully.", 
+            "user_details": user_details
+        }, status=200)
     except Exception as e:
         return JsonResponse({'success': False, 'message': f'Error saving profile picture: {str(e)}'}, status=500)
-
