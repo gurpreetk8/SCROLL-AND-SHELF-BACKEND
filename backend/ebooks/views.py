@@ -863,54 +863,53 @@ from django.db.models import Q
 
 @csrf_exempt
 def recommend_books(request):
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'message': 'Use POST.'}, status=405)
-
     try:
         # 1. Authentication
-        auth_header = request.headers.get('Authorization', '')
-        if not auth_header.startswith('Bearer '):
-            return JsonResponse({'success': False, 'message': 'Invalid auth header.'}, status=401)
+        token = request.headers.get('Authorization', '').split('Bearer ')[-1]
+        if not token:
+            return JsonResponse({'success': False, 'message': 'Token missing'}, status=401)
+        
+        # 2. Get User
+        try:
+            decoded = jwt_decode(token)  # Your custom function
+            user = CustomUser.objects.get(email=decoded.get('email'))
+        except Exception as e:
+            logger.error(f"Auth error: {str(e)}")
+            return JsonResponse({'success': False, 'message': 'Invalid token'}, status=401)
 
-        token = auth_header.split()[1]
-        if not auth_user(token):  # Your custom auth check
-            return JsonResponse({'success': False, 'message': 'Invalid token.'}, status=401)
-
-        # 2. Get user
-        decoded = jwt_decode(token)  # Your custom decode
-        user = CustomUser.objects.get(email=decoded.get('email'))
-
-        # 3. Check cache
-        cache_key = f'user_{user.id}_recommendations'
-        if cached_data := cache.get(cache_key):
-            return JsonResponse({'success': True, 'recommendations': cached_data})
-
-        # 4. Generate recommendations
+        # 3. Get Recommendations
         wishlist_ids = Wishlist.objects.filter(user=user).values_list('ebook_id', flat=True)
         reading_ids = UserBook.objects.filter(user=user, status='reading').values_list('book_id', flat=True)
 
-        # Fallback if no recommendations found
+        # Basic recommendation logic
         recommendations = list(
             Ebook.objects.annotate(
-                score=Avg('reviews__rating') * Count('reviews')
+                popularity=Count('reviews'),
+                avg_rating=Avg('reviews__rating')
             )
             .exclude(Q(id__in=wishlist_ids) | Q(id__in=reading_ids))
-            .order_by('-score')[:10]
+            .order_by('-avg_rating', '-popularity')[:10]
             .values('id', 'title', 'author', 'cover_url')
-        ) or [{
-            'id': 0,
-            'title': 'No recommendations found',
-            'author': 'Explore more books!',
-            'cover_url': None,
-            'reason': 'Add books to wishlist'
-        }]
+        )
 
-        cache.set(cache_key, recommendations, timeout=3600)
-        return JsonResponse({'success': True, 'recommendations': recommendations})
+        # Fallback if empty
+        if not recommendations:
+            recommendations = [{
+                'id': -1,
+                'title': 'No recommendations found',
+                'author': 'Try adding more books to your wishlist',
+                'cover_url': None
+            }]
+
+        return JsonResponse({
+            'success': True,
+            'recommendations': recommendations
+        })
 
     except Exception as e:
         logger.error(f"Recommendation error: {str(e)}", exc_info=True)
-        return JsonResponse(
-            {'success': False, 'message': 'Failed to generate recommendations'},
-            status=500
-        )
+        return JsonResponse({
+            'success': False,
+            'message': 'Failed to generate recommendations',
+            'error': str(e)  # Return actual error for debugging
+        }, status=500)
