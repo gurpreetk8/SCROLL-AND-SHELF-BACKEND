@@ -23,6 +23,7 @@ urlpatterns = [
     path('add_to_wishlist/', views.add_to_wishlist, name='add_to_wishlist'),
     path('get_wishlist/', views.get_wishlist, name='get_wishlist'),
     path('remove_from_wishlist/', views.remove_from_wishlist, name='remove_from_wishlist'),
+    path('check_wishlist_status/', views.check_wishlist_status, name='check_wishlist_status'),
 
     path('add_reading_book/', views.add_reading_book, name='add_reading_book'),
     path('get_reading_books/', views.get_reading_books, name='get_reading_books'),
