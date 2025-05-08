@@ -904,9 +904,13 @@ def recommend_books(request):
 
     try:
         # Authentication
-        token = request.headers.get('Authorization', '').split('Bearer ')[-1]
-        if not token or not auth_user(token):
-            return JsonResponse({'success': False, 'message': 'Invalid token'}, status=401)
+        bearer = request.headers.get('Authorization')
+        if not bearer:
+            return JsonResponse({'success': False, 'message': 'Authentication header is required.'}, status=401)
+        
+        token = bearer.split()[1]
+        if not auth_user(token):
+            return JsonResponse({'success': False, 'message': 'Invalid token data.'}, status=401)
         
         decoded = jwt_decode(token)
         user = CustomUser.objects.get(email=decoded.get('email'))
@@ -920,29 +924,22 @@ def recommend_books(request):
         wishlist_ids = Wishlist.objects.filter(user=user).values_list('ebook_id', flat=True)
         reading_ids = UserBook.objects.filter(user=user, status='reading').values_list('book_id', flat=True)
 
-        recommendations = list(
-            Ebook.objects.annotate(
-                avg_rating=Avg('reviews_ratings__rating'),
-                rating_count=Count('reviews_ratings')
-            )
-            .exclude(Q(id__in=wishlist_ids) | Q(id__in=reading_ids))
-            .order_by('-avg_rating', '-rating_count')[:10]
-            .values(
-                'id', 
-                'title', 
-                'author', 
-                'cover_image',
-                'avg_rating',
-                'rating_count'
-            )
-        )
-
-        # Build full media URLs
-        for book in recommendations:
-            if book['cover_image']:
-                book['cover_url'] = request.build_absolute_uri(book['cover_image'])
-            else:
-                book['cover_url'] = None
+        recommendations = []
+        ebooks = Ebook.objects.annotate(
+            avg_rating=Avg('reviews_ratings__rating'),
+            rating_count=Count('reviews_ratings')
+        ).exclude(Q(id__in=wishlist_ids) | Q(id__in=reading_ids)) \
+         .order_by('-avg_rating', '-rating_count')[:10]
+        
+        for ebook in ebooks:
+            recommendations.append({
+                'id': ebook.id,
+                'title': ebook.title,
+                'author': ebook.author,
+                'cover_url': request.build_absolute_uri(ebook.cover_image.url) if ebook.cover_image else None,
+                'avg_rating': ebook.avg_rating or 0,
+                'rating_count': ebook.rating_count or 0
+            })
 
         # Fallback if empty
         if not recommendations:
@@ -956,7 +953,11 @@ def recommend_books(request):
             }]
 
         cache.set(cache_key, recommendations, timeout=3600)
-        return JsonResponse({'success': True, 'recommendations': recommendations})
+        return JsonResponse({
+            'success': True,
+            'message': 'Recommendations fetched successfully',
+            'recommendations': recommendations
+        })
 
     except Exception as e:
         logger.error(f"Recommendation error: {str(e)}", exc_info=True)
