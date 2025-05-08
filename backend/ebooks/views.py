@@ -966,3 +966,56 @@ def recommend_books(request):
             'message': 'Failed to load recommendations',
             'error': str(e)
         }, status=500)
+
+@csrf_exempt
+def book_search(request):
+    # Get query parameters
+    title = request.GET.get('title', '').strip()
+    author = request.GET.get('author', '').strip()
+    category_name = request.GET.get('category', '').strip()
+
+    # Start with all ebooks
+    queryset = Ebook.objects.all()
+
+    # Apply filters based on provided parameters
+    if title:
+        queryset = queryset.filter(title__icontains=title)
+    if author:
+        queryset = queryset.filter(author__icontains=author)
+    if category_name:
+        queryset = queryset.filter(category__name__icontains=category_name)
+
+    # Prepare the results in a dictionary format
+    results = []
+    for book in queryset:
+        results.append({
+            'id': book.id,
+            'title': book.title,
+            'author': book.author,
+            'description': book.description,
+            'cover_image': request.build_absolute_uri(book.cover_image.url) if book.cover_image else None,
+            'file': request.build_absolute_uri(book.file.url) if book.file else None,
+            'category': {
+                'id': book.category.id,
+                'name': book.category.name,
+                'type': book.category.type,
+                'slug': book.category.slug,
+            },
+            'series': {
+                'id': book.series.id if book.series else None,
+                'name': book.series.name if book.series else None,
+            } if book.book_type == 'series' else None,
+            'series_order': book.series_order,
+            'book_type': book.book_type,
+            'tags': book.get_tags_list(),
+            'best_seller': book.best_seller,
+            'best_of_month': book.best_of_month,
+            'trending': book.trending,
+            'created_at': book.created_at.isoformat(),
+        })
+
+    return JsonResponse({
+        'status': 'success',
+        'count': len(results),
+        'results': results
+    })
