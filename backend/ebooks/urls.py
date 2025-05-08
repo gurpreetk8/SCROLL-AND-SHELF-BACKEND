@@ -29,6 +29,8 @@ urlpatterns = [
     path('get_reading_books/', views.get_reading_books, name='get_reading_books'),
 
     path('recommend_books/', views.recommend_books, name='recommend_books'),
+
+    path('book_search/', views.book_search, name='book_search'),
     
     
 ]
