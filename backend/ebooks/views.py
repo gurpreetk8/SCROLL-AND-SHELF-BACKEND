@@ -903,7 +903,7 @@ def recommend_books(request):
         return JsonResponse({'success': False, 'message': 'Use POST.'}, status=405)
 
     try:
-        # 1. Authentication
+        # Authentication
         token = request.headers.get('Authorization', '').split('Bearer ')[-1]
         if not token or not auth_user(token):
             return JsonResponse({'success': False, 'message': 'Invalid token'}, status=401)
@@ -911,12 +911,12 @@ def recommend_books(request):
         decoded = jwt_decode(token)
         user = CustomUser.objects.get(email=decoded.get('email'))
 
-        # 2. Check cache first
+        # Check cache
         cache_key = f'recs_{user.id}'
         if cached_recs := cache.get(cache_key):
             return JsonResponse({'success': True, 'recommendations': cached_recs})
 
-        # 3. Generate recommendations
+        # Get recommendations with actual ratings
         wishlist_ids = Wishlist.objects.filter(user=user).values_list('ebook_id', flat=True)
         reading_ids = UserBook.objects.filter(user=user, status='reading').values_list('book_id', flat=True)
 
@@ -927,21 +927,35 @@ def recommend_books(request):
             )
             .exclude(Q(id__in=wishlist_ids) | Q(id__in=reading_ids))
             .order_by('-avg_rating', '-rating_count')[:10]
-            .values('id', 'title', 'author', 'cover_image')
+            .values(
+                'id', 
+                'title', 
+                'author', 
+                'cover_image',
+                'avg_rating',
+                'rating_count'
+            )
         )
 
-        # 4. Fallback if empty
+        # Build full media URLs
+        for book in recommendations:
+            if book['cover_image']:
+                book['cover_url'] = request.build_absolute_uri(book['cover_image'])
+            else:
+                book['cover_url'] = None
+
+        # Fallback if empty
         if not recommendations:
             recommendations = [{
                 'id': -1,
                 'title': 'Explore New Books',
                 'author': 'Add more to your wishlist',
-                'cover_image': None
+                'cover_url': request.build_absolute_uri('/static/default-book.png'),
+                'avg_rating': 0,
+                'rating_count': 0
             }]
 
-        # Cache for 1 hour
         cache.set(cache_key, recommendations, timeout=3600)
-        
         return JsonResponse({'success': True, 'recommendations': recommendations})
 
     except Exception as e:
