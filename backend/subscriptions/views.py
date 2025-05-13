@@ -67,3 +67,35 @@ def pre_book_subscription(request):
         'start_date': subscription.start_date.isoformat(),
         'end_date': subscription.end_date.isoformat()
     }, status=200)
+
+@csrf_exempt
+def check_subscription(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
+    bearer = request.headers.get('Authorization')
+    if not bearer:
+        return JsonResponse({'success': False, 'message': 'Authentication header is required.'}, status=401)
+    
+    token = bearer.split()[1]
+    if not auth_user(token):
+        return JsonResponse({'success': False, 'message': 'Invalid token data.'}, status=401)
+    
+    decoded_token = jwt_decode(token)
+    user_email = decoded_token.get('email')
+    
+    try:
+        user = CustomUser.objects.get(email=user_email)
+        subscription = Subscription.objects.filter(user=user).first()
+        
+        if subscription and subscription.is_active and subscription.end_date > timezone.now():
+            return JsonResponse({
+                'success': True,
+                'has_subscription': True,
+                'end_date': subscription.end_date.isoformat()
+            })
+        return JsonResponse({
+            'success': True,
+            'has_subscription': False
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
