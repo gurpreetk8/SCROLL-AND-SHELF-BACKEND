@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from users.utils import jwt_encode, jwt_decode, auth_user
 
+
 @csrf_exempt
 def create_subscription(request):
     if request.method != 'POST':
@@ -33,7 +34,11 @@ def create_subscription(request):
         # Check for existing active subscription
         existing_subscription = Subscription.objects.filter(user=user).first()
         if existing_subscription and existing_subscription.is_active and existing_subscription.end_date > timezone.now():
-            return JsonResponse({'success': False, 'message': 'Active subscription already exists'}, status=400)
+            return JsonResponse({
+                'success': False,
+                'message': 'Active subscription already exists',
+                'code': 'SUBSCRIPTION_EXISTS'
+            }, status=200)  # Changed from 400 to 200
 
         # Parse request data
         try:
@@ -78,6 +83,7 @@ def create_subscription(request):
         return JsonResponse({'success': False, 'message': 'User not found'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
     
 @csrf_exempt
 def check_subscription(request):
