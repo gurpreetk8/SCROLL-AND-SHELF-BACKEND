@@ -105,6 +105,7 @@ def check_subscription(request):
             return JsonResponse({
                 'success': True,
                 'has_subscription': True,
+                'start_date': subscription.start_date.isoformat(),
                 'end_date': subscription.end_date.isoformat()
             })
         return JsonResponse({
