@@ -31,6 +31,8 @@ urlpatterns = [
     path('recommend_books/', views.recommend_books, name='recommend_books'),
 
     path('book_search/', views.book_search, name='book_search'),
+
+    path('request_book/', views.request_book, name='request_book'),
     
     
 ]

@@ -9,7 +9,7 @@ from django.db.models import Avg, Q, Count
 from django.core.cache import cache
 from django.conf import settings
 from users.models import CustomUser
-from ebooks.models import Series, UserBook,Ebook, Category, ReviewRating,Wishlist 
+from ebooks.models import Series, UserBook,Ebook, Category, ReviewRating, Wishlist, RequestBook 
 from django.utils import timezone
 from users.utils import jwt_encode, jwt_decode, auth_user
 
@@ -1019,3 +1019,50 @@ def book_search(request):
         'count': len(results),
         'results': results
     })
+
+@csrf_exempt
+def request_book(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method. Use POST.'}, status=405)
+
+    try:
+        # Authentication
+        bearer = request.headers.get('Authorization')
+        if not bearer:
+            return JsonResponse({'success': False, 'message': 'Authentication header is required.'}, status=401)
+
+        token = bearer.split()[1]
+        if not auth_user(token):
+            return JsonResponse({'success': False, 'message': 'Invalid token data.'}, status=401)
+
+        decoded_token = jwt_decode(token)
+        user_email = decoded_token.get('email')
+
+        try:
+            user = CustomUser.objects.get(email=user_email)
+        except CustomUser.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'User not found.'}, status=404)
+
+        # Parse request data
+        data = json.loads(request.body)
+        title = data.get('title')
+        author = data.get('author')
+        genre = data.get('genre')
+        message = data.get('message', '')
+
+        if not title or not author or not genre:
+            return JsonResponse({'success': False, 'message': 'Title, author, and genre are required.'}, status=400)
+
+        # Save request
+        RequestBook.objects.create(
+            user=user,
+            title=title,
+            author=author,
+            genre=genre,
+            message=message
+        )
+
+        return JsonResponse({'success': True, 'message': 'Book request submitted successfully.'}, status=201)
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error: {str(e)}'}, status=500)

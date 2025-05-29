@@ -166,3 +166,14 @@ class SeriesImage(models.Model):
 
     def __str__(self):
         return f"{self.series.name} image #{self.id}"
+    
+class RequestBook(models.Model):
+    user = models.ForeignKey('users.CustomUser', on_delete=models.CASCADE, related_name='book_requests')
+    title = models.CharField(max_length=255)
+    author = models.CharField(max_length=255)
+    genre = models.CharField(max_length=100)
+    message = models.TextField(blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.title} by {self.author} - {self.user.username}"
