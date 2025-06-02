@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Ebook, Category, SampleImage, RequestBook
+from .models import Ebook, Category, SampleImage, RequestBook, Series, SeriesImage
 
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('name',)
@@ -13,6 +13,13 @@ class SampleImageInline(admin.TabularInline):
     verbose_name = 'Sample Image'
     verbose_name_plural = 'Sample Images'
 
+class SeriesImageInline(admin.TabularInline):
+    model = SeriesImage
+    extra = 1
+    readonly_fields = ('uploaded_at',)
+    verbose_name = 'Series Image'
+    verbose_name_plural = 'Series Images'
+
 class EbookAdmin(admin.ModelAdmin):
     list_display = ('title', 'author', 'created_at',)
     search_fields = ('title', 'author', 'description')
@@ -22,6 +29,13 @@ class EbookAdmin(admin.ModelAdmin):
 
     def categories(self, obj):
         return ', '.join([c.name for c in obj.categories.all()])
+
+class SeriesAdmin(admin.ModelAdmin):
+    list_display = ('name', 'created_at')
+    search_fields = ('name', 'description')
+    list_filter = ('created_at',)
+    ordering = ('-created_at',)
+    inlines = [SeriesImageInline]
 
 class RequestBookAdmin(admin.ModelAdmin):
     list_display = ('id', 'user', 'title', 'author', 'genre', 'created_at')
@@ -37,3 +51,4 @@ class RequestBookAdmin(admin.ModelAdmin):
 admin.site.register(Category, CategoryAdmin)
 admin.site.register(Ebook, EbookAdmin)
 admin.site.register(RequestBook, RequestBookAdmin)
+admin.site.register(Series, SeriesAdmin)
