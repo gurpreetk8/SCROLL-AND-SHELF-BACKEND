@@ -10,6 +10,35 @@ from users.utils import jwt_decode, auth_user
 from django.forms.models import model_to_dict
 
 @csrf_exempt
+@require_http_methods(["GET"])
+def retrieve_comment_view(request, comment_id):
+    try:
+        comment = Comment.objects.select_related('user', 'post').get(id=comment_id)
+        return JsonResponse({
+            "success": True,
+            "comment": {
+                "id": comment.id,
+                "content": comment.content,
+                "created_at": comment.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                "user": {
+                    "id": comment.user.id,
+                    "email": comment.user.email,
+                    "first_name": comment.user.first_name,
+                    "last_name": comment.user.last_name
+                },
+                "post": {
+                    "id": comment.post.id,
+                    "title": comment.post.title,
+                    "user_email": comment.post.user.email
+                }
+            }
+        })
+    except Comment.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Comment not found"}, status=404)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def create_comment_view(request, post_id):
     bearer = request.headers.get('Authorization')
@@ -50,14 +79,13 @@ def create_comment_view(request, post_id):
             content=content
         )
         
-        # Enhanced response with user and post details
         response_data = {
             "success": True,
             "message": "Comment created successfully.",
             "comment": {
                 "id": comment.id,
                 "content": comment.content,
-                "created_at": comment.created_at,
+                "created_at": comment.created_at.strftime('%Y-%m-%d %H:%M:%S'),
                 "user": {
                     "id": user.id,
                     "email": user.email,
@@ -116,7 +144,26 @@ def update_comment_view(request, comment_id):
     comment.content = content
     comment.save()
 
-    return JsonResponse({"success": True, "message": "Comment updated successfully.", "comment": model_to_dict(comment)}, status=200)
+    return JsonResponse({
+        "success": True,
+        "message": "Comment updated successfully.",
+        "comment": {
+            "id": comment.id,
+            "content": comment.content,
+            "created_at": comment.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name
+            },
+            "post": {
+                "id": comment.post.id,
+                "title": comment.post.title,
+                "user_email": comment.post.user.email
+            }
+        }
+    }, status=200)
 
 @csrf_exempt
 @require_http_methods(["DELETE"])
@@ -164,7 +211,7 @@ def list_comments_for_post_view(request, post_id):
         comments_data.append({
             "id": comment.id,
             "content": comment.content,
-            "created_at": comment.created_at,
+            "created_at": comment.created_at.strftime('%Y-%m-%d %H:%M:%S'),
             "user": {
                 "id": comment.user.id,
                 "email": comment.user.email,
@@ -181,5 +228,5 @@ def list_comments_for_post_view(request, post_id):
     return JsonResponse({
         "success": True,
         "comments": comments_data,
-        "post_owner": post.user.email  # Added post owner email
+        "post_owner": post.user.email
     }, safe=False)
