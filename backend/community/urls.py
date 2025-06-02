@@ -20,7 +20,7 @@ urlpatterns = [
     # REPLY API'S
     path('replies/', reply_views.list_all_replies, name='list_all_replies'),
     path('list_specific_reply/<int:reply_id>/', reply_views.list_specific_reply, name='list_specific_reply'),
-    path('list_specific_reply/<int:reply_id>/', reply_views.retrieve_reply, name='retrieve_reply'),
+    
     path('create_reply/<int:comment_id>/', reply_views.create_reply, name='create_reply'),
     path('edit_reply/<int:reply_id>/', reply_views.update_reply, name='update_reply'),
     path('delete_reply/<int:reply_id>/', reply_views.delete_reply, name='delete_reply'),
