@@ -49,10 +49,32 @@ def create_comment_view(request, post_id):
             post=post,
             content=content
         )
+        
+        # Enhanced response with user and post details
+        response_data = {
+            "success": True,
+            "message": "Comment created successfully.",
+            "comment": {
+                "id": comment.id,
+                "content": comment.content,
+                "created_at": comment.created_at,
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name
+                },
+                "post": {
+                    "id": post.id,
+                    "title": post.title,
+                    "user_email": post.user.email
+                }
+            }
+        }
+        return JsonResponse(response_data, status=200)
+        
     except Exception as e:
         return JsonResponse({"success": False, "message": f"Error creating comment: {e}"}, status=500)
-
-    return JsonResponse({"success": True, "message": "Comment created successfully.", "comment": model_to_dict(comment)}, status=200)
 
 @csrf_exempt
 @require_http_methods(["PUT"])
@@ -135,16 +157,29 @@ def list_comments_for_post_view(request, post_id):
     except Post.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'Post not found.'}, status=404)
 
-    comments = post.comments.all()
-    comments_data = [model_to_dict(comment) for comment in comments]
-    return JsonResponse(comments_data, safe=False)
-
-@csrf_exempt
-@require_http_methods(["GET"])
-def retrieve_comment_view(request, comment_id):
-    try:
-        comment = Comment.objects.get(id=comment_id)
-    except Comment.DoesNotExist:
-        return JsonResponse({"success": False, "message": "Comment not found."}, status=404)
-    return JsonResponse(model_to_dict(comment))
-
+    comments = post.comments.select_related('user').all()
+    comments_data = []
+    
+    for comment in comments:
+        comments_data.append({
+            "id": comment.id,
+            "content": comment.content,
+            "created_at": comment.created_at,
+            "user": {
+                "id": comment.user.id,
+                "email": comment.user.email,
+                "first_name": comment.user.first_name,
+                "last_name": comment.user.last_name
+            },
+            "post": {
+                "id": post.id,
+                "title": post.title,
+                "user_email": post.user.email
+            }
+        })
+    
+    return JsonResponse({
+        "success": True,
+        "comments": comments_data,
+        "post_owner": post.user.email  # Added post owner email
+    }, safe=False)
