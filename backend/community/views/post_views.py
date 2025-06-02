@@ -14,6 +14,7 @@ from users.utils import jwt_encode, jwt_decode, auth_user
 @require_http_methods(["GET"])
 def list_all_posts(request):
     try:
+        # Authentication checks
         bearer = request.headers.get('Authorization')
         if not bearer:
             return JsonResponse({'success': False, 'message': 'Authentication header is required.'}, status=401)
@@ -30,6 +31,7 @@ def list_all_posts(request):
         except CustomUser.DoesNotExist:
             return JsonResponse({'success': False, 'message': 'User not found.'}, status=404)
 
+        # Fetch posts and build response
         posts = Post.objects.all().order_by('-created_at')
         post_list = []
         for post in posts:
@@ -41,31 +43,42 @@ def list_all_posts(request):
                     'content': reply.content,
                     'created_at': reply.created_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
                 } for reply in comment.replies.all()]
-                comment_data = {
+                comments.append({
                     'id': comment.id,
                     'user': comment.user.first_name,
                     'content': comment.content,
                     'created_at': comment.created_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
                     'replies': replies
-                }
-                comments.append(comment_data)
-            post_data = {
+                })
+
+            # KEY CHANGE: Use request.build_absolute_uri() for image URLs
+            image_url = request.build_absolute_uri(post.image.url) if post.image else None
+
+            post_list.append({
                 'id': post.id,
                 'user': post.user.email,
                 'title': post.title,
                 'content': post.content,
-                'image': post.image.url if post.image else None,
+                'image': image_url,  # Now returns absolute URL (e.g., https://...)
                 'created_at': post.created_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
                 'updated_at': post.updated_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
                 'comments': comments,
                 'like_count': post.likes.count(),
                 'user_liked': post.likes.filter(user=user).exists()
-            }
-            post_list.append(post_data)
-        return JsonResponse({'success': True, 'message': 'Posts retrieved successfully', 'posts': post_list}, status=200)
-    except Exception as e:
-        return JsonResponse({'success': False, 'message': f"Error retrieving posts: {e}"}, status=500)
+            })
 
+        return JsonResponse({
+            'success': True,
+            'message': 'Posts retrieved successfully',
+            'posts': post_list
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f"Error retrieving posts: {str(e)}"
+        }, status=500)
+    
 @csrf_exempt
 @require_http_methods(["GET"])
 def get_post_by_id(request, post_id):

@@ -16,6 +16,15 @@ def list_all_replies(request):
     replies_data = [model_to_dict(reply) for reply in replies]
     return JsonResponse(replies_data, safe=False)
 
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_replies_for_comment(request, comment_id):
+    replies = Reply.objects.filter(comment_id=comment_id).order_by('created_at')
+    replies_data = [model_to_dict(reply) for reply in replies]
+    return JsonResponse(replies_data, safe=False)
+
+
 @csrf_exempt
 @require_http_methods(["GET"])
 def retrieve_reply(request, reply_id):
