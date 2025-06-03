@@ -172,7 +172,7 @@ class RequestBook(models.Model):
     title = models.CharField(max_length=255)
     author = models.CharField(max_length=255)
     genre = models.CharField(max_length=100)
-    message = models.TextField(blank=True)
+    message = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
