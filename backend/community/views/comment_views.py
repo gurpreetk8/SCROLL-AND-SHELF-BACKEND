@@ -95,7 +95,7 @@ def create_comment_view(request, post_id):
                 "post": {
                     "id": post.id,
                     "title": post.title,
-                    "user_email": post.user.email
+                    "username": post.user.username
                 }
             }
         }
