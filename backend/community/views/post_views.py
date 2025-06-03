@@ -164,7 +164,12 @@ def create_post(request):
         post = Post.objects.create(user=user, title=title, content=content, image=image)
         post_data = {
             'post': post.id,
-            'user': post.user.email,
+            'user': {
+                'email': user.email,
+                'username': user.username,  # Add username
+                'first_name': user.first_name,
+                'last_name': user.last_name
+            },
             'title': post.title,
             'content': post.content,
             'image': post.image.url if post.image else None,
@@ -174,7 +179,8 @@ def create_post(request):
         return JsonResponse({'success': True, 'message': 'Post created successfully', 'post': post_data}, status=201)
     except Exception as e:
         return JsonResponse({'success': False, 'message': f"Error creating post: {e}"}, status=500)
-
+    
+    
 @csrf_exempt
 @require_http_methods(["POST"])
 def update_post(request, post_id):

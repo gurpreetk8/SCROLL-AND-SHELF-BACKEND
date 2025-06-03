@@ -89,13 +89,14 @@ def create_comment_view(request, post_id):
                 "user": {
                     "id": user.id,
                     "email": user.email,
+                    "username": user.username,  # Add username
                     "first_name": user.first_name,
                     "last_name": user.last_name
                 },
                 "post": {
                     "id": post.id,
                     "title": post.title,
-                    "username": post.user.username
+                    "username": post.user.username  # Add post owner's username
                 }
             }
         }
